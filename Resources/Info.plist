@@ -2,54 +2,54 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleExecutable</key>
-    <string>Islet</string>
-    <key>CFBundleIdentifier</key>
-    <string>dev.islet.app</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>Islet</string>
-    <key>CFBundleDisplayName</key>
-    <string>Islet</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-    <key>NSSupportsAutomaticTermination</key>
-    <false/>
-    <key>NSAppleEventsUsageDescription</key>
-    <string>Islet reads the current track and artwork from Music or Spotify and sends play/pause/skip commands.</string>
-    <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>Islet shows your next meeting in the notch, with a countdown and a Join button for its video call link.</string>
-    <key>NSCalendarsUsageDescription</key>
-    <string>Islet shows your next meeting in the notch, with a countdown and a Join button for its video call link.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Islet can mute your microphone from the island. It never records audio.</string>
-    <key>NSDownloadsFolderUsageDescription</key>
-    <string>Islet adds the file you just downloaded to the shelf when you click Add to Shelf.</string>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>dev.islet.app</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>islet</string>
-            </array>
-        </dict>
-    </array>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Islet</string>
+	<key>CFBundleExecutable</key>
+	<string>Islet</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>dev.islet.app</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Islet</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.2.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dev.islet.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>islet</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>2</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Islet reads the current track and artwork from Music or Spotify and sends play/pause/skip commands.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Islet shows your next meeting in the notch, with a countdown and a Join button for its video call link.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Islet shows your next meeting in the notch, with a countdown and a Join button for its video call link.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Islet adds the file you just downloaded to the shelf when you click Add to Shelf.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Islet can mute your microphone from the island. It never records audio.</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
 </dict>
 </plist>
