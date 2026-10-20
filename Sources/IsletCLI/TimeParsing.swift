@@ -3,7 +3,7 @@ import IsletProtocol
 
 /// Durations, times of day and weekdays as typed on the command line.
 enum TimeParsing {
-    /// `CommandParser.duration` (the command bar's grammar: 25, 25m, 1h30, 90s, 5:00...), with a local
+    /// `CommandParser.duration` (the natural grammar: 25, 25m, 1h30, 90s, 5:00...), with a local
     /// fallback for the same forms so the tool never depends on the parser's coverage.
     static func duration(_ text: String) -> TimeInterval? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)

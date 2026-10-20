@@ -192,45 +192,54 @@ private struct StopwatchCompactValue: View {
     }
 }
 
-/// Live m:ss at 1 Hz while visible; hundredths only once stopped and in the lap list.
+/// Live m:ss at 1 Hz while visible ("Running" beside it); hundredths only once stopped and in the lap list.
 private struct StopwatchCard: View {
     let model: StopwatchActivity
 
     var body: some View {
         ActivityCard(title: model.title, symbol: model.symbol, tint: model.tint, actions: model.actions) {
             if let state = model.state {
-                HStack(alignment: .top, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Group {
-                            if state.isRunning {
-                                LiveCountUp(anchor: state.anchor(at: Date()))
-                            } else {
-                                Text(verbatim: ClockText.hundredths(state.elapsed(at: Date())))
-                            }
-                        }
-                        .font(.system(size: 28, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(state.isRunning ? IsletTheme.primaryText : IsletTheme.secondaryText)
-                        .lineLimit(1)
-
-                        Text(state.isRunning ? "Running" : "Paused")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(IsletTheme.secondaryText)
+                // The last laps beside the time when both fit; otherwise the time alone, never truncated.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: 0) {
+                        time(state).fixedSize()
+                        Spacer(minLength: 14)
+                        laps(state).fixedSize()
                     }
-                    laps(state)
+                    time(state)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
 
-    /// The last three laps, newest first.
+    private func time(_ state: StopwatchState) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Group {
+                if state.isRunning {
+                    LiveCountUp(anchor: state.anchor(at: Date()))
+                } else {
+                    Text(verbatim: ClockText.hundredths(state.elapsed(at: Date())))
+                }
+            }
+            .font(.system(size: 26, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(state.isRunning ? IsletTheme.primaryText : IsletTheme.secondaryText)
+
+            Text(state.isRunning ? "Running" : "Paused")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(IsletTheme.secondaryText)
+        }
+        .lineLimit(1)
+    }
+
+    /// The last two laps, newest first.
     @ViewBuilder
     private func laps(_ state: StopwatchState) -> some View {
         let durations = state.lapDurations
         if !durations.isEmpty {
-            VStack(alignment: .trailing, spacing: 2) {
-                ForEach(Array(durations.enumerated().reversed().prefix(3)), id: \.offset) { index, lap in
+            VStack(alignment: .trailing, spacing: 1) {
+                ForEach(Array(durations.enumerated().reversed().prefix(2)), id: \.offset) { index, lap in
                     HStack(spacing: 8) {
                         Text(verbatim: "Lap \(index + 1)")
                             .foregroundStyle(IsletTheme.tertiaryText)
@@ -241,7 +250,6 @@ private struct StopwatchCard: View {
                     .monospacedDigit()
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 }

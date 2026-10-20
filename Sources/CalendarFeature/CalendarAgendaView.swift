@@ -2,9 +2,9 @@ import AppKit
 import SwiftUI
 import IsletUI
 
-/// The open island's Calendar page (≈ 480×144 pt): today's date as a tile, beside it the next events (what is left
-/// of today, then tomorrow; up to 4 rows) with Join for video calls. Before the user connects: the tile and
-/// "Connect Calendar…" (the only place, with Settings, where the calendar prompt can appear).
+/// The open island's Calendar page (≈ 490×84 pt): today's date as a square tile, beside it the next events (what is
+/// left of today, then tomorrow; up to 3 one-line rows) with Join for video calls. Before the user connects: the tile
+/// and "Connect Calendar…" (the only place, with Settings, where the calendar prompt can appear).
 ///
 /// Nothing polls: events come from `CalendarService` (store changes, wake, day change) and the view only re-renders
 /// at the next start, end or midnight while it is on screen.
@@ -19,7 +19,7 @@ public struct CalendarAgendaView: View {
         self.isActive = isActive
     }
 
-    private nonisolated static let maxRows = 4
+    private nonisolated static let maxRows = 3
     /// A Join button turns prominent this long before the start.
     nonisolated static let joinLead: TimeInterval = 10 * 60
 
@@ -28,7 +28,7 @@ public struct CalendarAgendaView: View {
         let now = Date()
         // Starts with `now`: before its first entry an explicit timeline renders that entry's date.
         TimelineView(.explicit([now] + boundaries(for: events, now: now))) { context in
-            HStack(spacing: 18) {
+            HStack(spacing: 14) {
                 DateTile(date: context.date)
                 Group {
                     if let events {
@@ -97,23 +97,23 @@ private struct DateTile: View {
     @State private var hovering = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         Button(action: openCalendar) {
             VStack(spacing: 0) {
                 Text(verbatim: date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                    .font(.system(size: 13, weight: .bold))
-                    .kerning(0.6)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .kerning(0.5)
                     .foregroundStyle(CalendarFeature.tint)
                 Text(verbatim: date.formatted(.dateTime.day()))
-                    .font(.system(size: 60, weight: .light))
+                    .font(.system(size: 36, weight: .light))
                     .monospacedDigit()
                     .foregroundStyle(IsletTheme.primaryText)
                     .minimumScaleFactor(0.5)
-                    .padding(.top, -4)
+                    .padding(.top, -3)
                 Text(verbatim: date.formatted(.dateTime.month(.wide)))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(IsletTheme.secondaryText)
-                    .padding(.top, -6)
+                    .padding(.top, -4)
             }
             .lineLimit(1)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -156,12 +156,14 @@ private struct AgendaList: View {
                     AgendaRow(event: event, now: now)
                 }
             }
+            // Three rows fill the page (26 pt each, 3 apart); fewer sit centered beside the tile.
             .frame(maxHeight: .infinity)
         }
     }
 }
 
-/// Color bar · title over "14:00 – 15:00 · Room 4" (a "Now" badge while under way) · Join. Opens the event in Calendar.
+/// One line: start time ("Now" while under way) · color bar · title · "Room 4" / "until 15:00" / "Tomorrow" · Join.
+/// Opens the event in Calendar.
 private struct AgendaRow: View {
     let event: MeetingEvent
     let now: Date
@@ -170,24 +172,36 @@ private struct AgendaRow: View {
     var body: some View {
         let color = Color(meeting: event.color)
         let ongoing = event.start <= now
-        HStack(spacing: 9) {
+        HStack(spacing: 8) {
+            Group {
+                if ongoing {
+                    Text("Now")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(color)
+                        .padding(.horizontal, 6)
+                        .frame(height: 16)
+                        .background(Capsule().fill(color.opacity(0.22)))
+                } else {
+                    Text(verbatim: event.start.formatted(date: .omitted, time: .shortened))
+                        .font(.system(size: 11.5, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(IsletTheme.secondaryText)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            .frame(width: 50, alignment: .leading)
+
             Capsule()
                 .fill(color)
-                .frame(width: 4, height: 26)
-            VStack(alignment: .leading, spacing: 1) {
+                .frame(width: 3, height: 16)
+
+            HStack(spacing: 0) {
                 Text(verbatim: event.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(IsletTheme.primaryText)
-                HStack(spacing: 5) {
-                    if ongoing {
-                        Text("Now")
-                            .font(.system(size: 9.5, weight: .bold))
-                            .foregroundStyle(color)
-                            .padding(.horizontal, 5)
-                            .frame(height: 14)
-                            .background(Capsule().fill(color.opacity(0.22)))
-                    }
-                    Text(verbatim: detail(ongoing: ongoing))
+                    .layoutPriority(1)
+                if let detail = detail(ongoing: ongoing) {
+                    Text(verbatim: " · \(detail)")
                         .font(.system(size: 11))
                         .monospacedDigit()
                         .foregroundStyle(IsletTheme.secondaryText)
@@ -202,35 +216,40 @@ private struct AgendaRow: View {
                 }
             }
         }
-        .padding(.leading, 6)
-        .padding(.trailing, 4)
-        .frame(height: 33)
+        .padding(.leading, 7)
+        .padding(.trailing, 3)
+        .frame(height: 26)
         .background(
-            RoundedRectangle(cornerRadius: IsletTheme.smallRadius + 1, style: .continuous)
+            RoundedRectangle(cornerRadius: IsletTheme.smallRadius, style: .continuous)
                 .fill(hovering ? IsletTheme.card : .clear)
         )
         .contentShape(Rectangle())
         .onTapGesture { MeetingController.shared.openCalendar(at: event) }
         .onHover { hovering = $0 }
         .animation(IsletTheme.quick, value: hovering)
-        .help("Open in Calendar")
+        .help(help(ongoing: ongoing))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
     }
 
-    /// "14:00 – 15:00 · Room 4", "Until 15:00" while under way, "Tomorrow 9:00 – 9:30".
-    private func detail(ongoing: Bool) -> String {
+    /// "Room 4", "until 15:00" while under way, "Tomorrow" (with the room: "Tomorrow · Room 4").
+    private func detail(ongoing: Bool) -> String? {
+        var parts: [String] = []
+        if ongoing, event.end > event.start {
+            parts.append("until \(event.end.formatted(date: .omitted, time: .shortened))")
+        } else if !ongoing, !Calendar.current.isDate(event.start, inSameDayAs: now) {
+            parts.append("Tomorrow")
+        }
+        if let location = event.location { parts.append(location) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "14:00 – 15:00 · Room 4 · Open in Calendar": the whole range, which the row has no room for.
+    private func help(ongoing: Bool) -> String {
         let start = event.start.formatted(date: .omitted, time: .shortened)
         let end = event.end.formatted(date: .omitted, time: .shortened)
-        var time: String
-        if ongoing {
-            time = event.end > event.start ? "Until \(end)" : start
-        } else {
-            time = event.end > event.start ? "\(start) – \(end)" : start
-            if !Calendar.current.isDate(event.start, inSameDayAs: now) { time = "Tomorrow \(time)" }
-        }
-        guard let location = event.location else { return time }
-        return "\(time) · \(location)"
+        let time = event.end > event.start ? "\(start) – \(end)" : start
+        return [time, event.location, "Open in Calendar"].compactMap { $0 }.joined(separator: " · ")
     }
 }
 
@@ -249,8 +268,8 @@ private struct JoinButton: View {
                     .font(.system(size: 11, weight: .semibold))
             }
             .foregroundStyle(prominent ? Color.white : IsletTheme.success)
-            .padding(.horizontal, 10)
-            .frame(height: 24)
+            .padding(.horizontal, 9)
+            .frame(height: 21)
             .background(Capsule().fill(prominent ? IsletTheme.success.opacity(hovering ? 1 : 0.85)
                                                  : IsletTheme.success.opacity(hovering ? 0.28 : 0.16)))
             .contentShape(Capsule())
@@ -264,30 +283,33 @@ private struct JoinButton: View {
 
 // MARK: - Not connected
 
-/// Connect Calendar… / access denied (link to Privacy & Security) / restricted.
+/// Connect Calendar… / access denied (link to Privacy & Security) / restricted: the explanation, its button beside it.
 private struct AccessContent: View {
     let service: CalendarService
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Your next events")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(IsletTheme.primaryText)
-            Text(verbatim: explanation)
-                .font(.system(size: 12))
-                .foregroundStyle(IsletTheme.secondaryText)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Your next events")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(IsletTheme.primaryText)
+                Text(verbatim: explanation)
+                    .font(.system(size: 11))
+                    .foregroundStyle(IsletTheme.secondaryText)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let problem = service.problem {
+                    Text(verbatim: problem)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(IsletTheme.danger)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             if let button {
                 CapsuleButton(title: button.title, action: button.action)
                     .disabled(service.isRequesting)
-                    .padding(.top, 6)
-            }
-            if let problem = service.problem {
-                Text(verbatim: problem)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(IsletTheme.danger)
-                    .lineLimit(2)
+                    .fixedSize()
             }
         }
     }
@@ -332,8 +354,18 @@ private struct CapsuleButton: View {
 
 #if DEBUG
 /// `-debugCalendar 1`: sample events for renders (nothing is read, no store); `-debugCalendar empty`: none.
+/// `-debugMeeting 1`: the meeting activity on a sample meeting 8 minutes away, with a room and a Join link.
 @MainActor
 enum DebugAgenda {
+    static let meeting: MeetingEvent? = {
+        guard UserDefaults.standard.bool(forKey: "debugMeeting") else { return nil }
+        let start = Date().addingTimeInterval(8 * 60 + 30)
+        return MeetingEvent(id: "debug.meeting", eventIdentifier: nil, title: "Design review", start: start,
+                            end: start.addingTimeInterval(30 * 60), location: "Room 4.2", calendarTitle: "Work",
+                            color: MeetingColor(red: 0.69, green: 0.45, blue: 1.0),
+                            joinURL: URL(string: "https://teams.microsoft.com/l/meetup-join/x"))
+    }()
+
     static let events: [MeetingEvent]? = {
         guard let mode = UserDefaults.standard.string(forKey: "debugCalendar") else { return nil }
         guard mode != "empty" else { return [] }

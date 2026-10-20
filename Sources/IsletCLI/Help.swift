@@ -15,7 +15,7 @@ enum Help {
 
     Usage:
       islet <command> [options]
-      islet "tea 4m"                  anything the island's command bar understands
+      islet "tea 4m"                  natural text: 25m, tea 4m, +5, pomo, at 7:30, awake 2h
 
     Clock:
       islet timer 25m [--label Tea]   start a timer (also: islet timer start 25m)

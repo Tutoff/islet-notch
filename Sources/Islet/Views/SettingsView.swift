@@ -188,7 +188,7 @@ private struct LiveActivitiesSettings: View {
             } header: {
                 Text("Launch")
             } footer: {
-                Text("Start timers, Pomodoro or Keep Awake from anywhere: type 25m, tea 4m, pomo, at 7:30 or awake 2h, then Return. Right-click the island for a quick menu.")
+                Text("Opens the island on its Launch page from anywhere, to start a timer, the stopwatch, Pomodoro or Keep Awake in a click. Right-click the island for a quick menu.")
                     .foregroundStyle(.secondary)
             }
 

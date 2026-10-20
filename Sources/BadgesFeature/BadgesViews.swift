@@ -99,7 +99,7 @@ private struct IconStack: View {
 
 // MARK: - Card
 
-/// Expanded card: up to six apps (as many as fit the width; "+N" for the rest), each with its badge.
+/// Expanded card: up to eight apps (as many as fit the width; "+N" for the rest), each with its badge.
 struct BadgesCard: View {
     var body: some View {
         let store = BadgesStore.shared
@@ -123,9 +123,9 @@ struct BadgesCard: View {
 private struct BadgeGrid: View {
     let badges: [AppBadge]
 
-    private static let tileWidth: CGFloat = 56
-    private static let spacing: CGFloat = 6
-    private static let maxTiles = 6
+    private static let tileWidth: CGFloat = 54
+    private static let spacing: CGFloat = 4
+    private static let maxTiles = 8
 
     var body: some View {
         GeometryReader { geometry in
@@ -152,20 +152,20 @@ private struct BadgeTile: View {
         Button {
             BadgesStore.shared.open(badge.bundleID)
         } label: {
-            VStack(spacing: 5) {
-                AppIconView(bundleID: badge.bundleID, size: 34)
+            VStack(spacing: 3) {
+                AppIconView(bundleID: badge.bundleID, size: 27)
                     .overlay(alignment: .topTrailing) {
-                        BadgeCapsule(text: badge.label, fontSize: 10)
-                            .offset(x: 7, y: -4)
+                        BadgeCapsule(text: badge.label, fontSize: 9.5)
+                            .offset(x: 7, y: -3)
                     }
                 Text(verbatim: badge.shortName)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 9.5, weight: .medium))
                     .foregroundStyle(IsletTheme.secondaryText)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
-            .frame(width: 56)
-            .padding(.vertical, 5)
+            .frame(width: 54)
+            .padding(.vertical, 2)
             .background(
                 RoundedRectangle(cornerRadius: IsletTheme.smallRadius, style: .continuous)
                     .fill(hovering ? IsletTheme.cardHover : Color.clear)
@@ -187,18 +187,18 @@ private struct MoreTile: View {
     let count: Int
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 3) {
             Text(verbatim: "+\(count)")
-                .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                .font(.system(size: 12, weight: .semibold).monospacedDigit())
                 .foregroundStyle(IsletTheme.secondaryText)
-                .frame(width: 34, height: 34)
+                .frame(width: 27, height: 27)
                 .background(Circle().fill(IsletTheme.card))
             Text("more")
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(IsletTheme.tertiaryText)
         }
-        .frame(width: 56)
-        .padding(.vertical, 5)
+        .frame(width: 54)
+        .padding(.vertical, 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: "\(count) more apps"))
     }

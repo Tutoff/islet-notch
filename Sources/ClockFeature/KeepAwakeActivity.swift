@@ -212,20 +212,32 @@ private struct KeepAwakeCard: View {
     var body: some View {
         ActivityCard(title: model.title, symbol: model.symbol, tint: model.tint, actions: model.actions) {
             if let state = model.state {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(verbatim: state.endDate.map { "Awake until \(ClockText.timeOfDay($0))" } ?? "Awake until turned off")
-                        .font(.system(size: 20, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: state.endDate.map { "Until \(ClockText.timeOfDay($0))" } ?? "Until turned off")
+                        .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(IsletTheme.primaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                    Text(state.displayCanSleep ? "The display can sleep" : "The display stays on")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(IsletTheme.secondaryText)
-                    Text("Closing the lid still sleeps the Mac.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(IsletTheme.tertiaryText)
+                    // The lid note only when the card has the width for it.
+                    ViewThatFits(in: .horizontal) {
+                        detail(state, lid: true)
+                        detail(state, lid: false)
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func detail(_ state: AwakeState, lid: Bool) -> some View {
+        HStack(spacing: 0) {
+            Text(state.displayCanSleep ? "The display can sleep" : "The display stays on")
+                .foregroundStyle(IsletTheme.secondaryText)
+            if lid {
+                Text(" · Closing the lid still sleeps the Mac")
+                    .foregroundStyle(IsletTheme.tertiaryText)
             }
         }
     }

@@ -5,8 +5,7 @@ import ActivityCore
 public enum CalendarFeature {
     /// Id of the meeting live activity.
     public static let activityID = "meeting"
-    /// Id of the "Meetings" launcher tile. It has no `IsletCommand`: the app calls `openFromLauncher()` when
-    /// this tile is chosen.
+    /// Id of the "Meetings" launcher tile. It has no `IsletCommand`: choosing it runs `openFromLauncher()`.
     public static let launcherID = "meeting"
 
     /// Launcher tile color, and the activity tint when the calendar color is unknown.
@@ -22,8 +21,14 @@ public enum CalendarFeature {
         installed = true
         ActivityCenter.shared.registerLauncher(ActivityLauncher(
             id: launcherID, title: "Meetings", symbol: "calendar", tint: tint, order: 60,
-            status: { launcherStatus }
+            open: { openFromLauncher() }, status: { launcherStatus }
         ))
+        #if DEBUG
+        if let sample = DebugAgenda.meeting {
+            MeetingController.shared.update(events: [sample])
+            return
+        }
+        #endif
         // No store and no status read unless the user connected earlier; then only with full access.
         CalendarService.shared.resumeIfConnected()
     }

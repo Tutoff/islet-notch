@@ -352,14 +352,23 @@ private struct AlarmCard: View {
 
     var body: some View {
         ActivityCard(title: model.title, symbol: model.symbol, tint: model.tint, actions: model.actions) {
-            VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(verbatim: model.timeText)
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: 26, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(IsletTheme.primaryText)
-                Text(model.alertIsLate ? "Missed while the Mac was asleep" : "Alarm")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(IsletTheme.secondaryText)
+                Group {
+                    if model.alertIsLate {
+                        ViewThatFits(in: .horizontal) {
+                            Text("Missed while the Mac was asleep")
+                            Text("Missed")
+                        }
+                    } else {
+                        Text("Alarm")
+                    }
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(IsletTheme.secondaryText)
             }
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -47,6 +47,9 @@ public enum ClockFeature {
     /// "Pause music when a timer ends" (key "clock.pauseMusicOnRing"), so the app can simply pause playback.
     @MainActor public static var onRing: (() -> Void)?
 
+    /// Set by the app: opens Settings › Live Activities, which has the alarm editor (the Alarm tile).
+    @MainActor public static var openAlarmSettings: (() -> Void)?
+
     // MARK: Internal
 
     @MainActor static var isInstalled = false
@@ -95,7 +98,7 @@ public enum ClockFeature {
         center.registerLauncher(ActivityLauncher(id: "pomodoro", title: "Pomodoro", symbol: "brain.head.profile",
                                                  tint: IsletTheme.tomato, order: 2, primary: .pomodoro(.start)))
         center.registerLauncher(ActivityLauncher(id: "alarm", title: "Alarm", symbol: "alarm", tint: IsletTheme.warning,
-                                                 order: 3, prefill: "at ",
+                                                 order: 3, open: openAlarms,
                                                  status: { AlarmsController.shared.launcherStatus }))
         center.registerLauncher(ActivityLauncher(
             id: "awake", title: "Keep Awake", symbol: "cup.and.saucer", tint: IsletTheme.cyan, order: 4,
@@ -106,6 +109,19 @@ public enum ClockFeature {
                 LauncherOption(id: "awake.forever", title: "∞", command: .awake(duration: nil)),
             ]
         ))
+    }
+
+    /// The Alarm tile, whose status line is Islet's next alarm: opens where those alarms are made and edited,
+    /// Settings › Live Activities › Alarms (time picker, days, label). They also come from `islet alarm` and
+    /// `islet://alarm`. Without the app's hook: the Clock app's Alarms tab, else the app.
+    @MainActor private static func openAlarms() {
+        if let openAlarmSettings {
+            openAlarmSettings()
+            return
+        }
+        if let url = URL(string: "clock-alarm:"), NSWorkspace.shared.open(url) { return }
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.clock") else { return }
+        NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration())
     }
 
     /// Presets 1, 3, 5, 10, 15, 25 min + recents. Registered again (same id) when the recents change.

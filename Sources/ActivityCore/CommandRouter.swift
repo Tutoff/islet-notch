@@ -1,6 +1,6 @@
 import Foundation
 
-/// Executes `IsletCommand`s from every entry point (command bar, URLs, CLI, menus). Features register
+/// Executes `IsletCommand`s from every entry point (launcher, URLs, CLI, menus). Features register
 /// handlers at install time.
 @MainActor
 public final class CommandRouter {

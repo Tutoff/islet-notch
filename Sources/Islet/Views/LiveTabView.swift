@@ -13,7 +13,7 @@ enum LivePage: String, CaseIterable, Identifiable {
     case music
     /// Today's date and the next events.
     case calendar
-    /// Launcher tiles and the command field.
+    /// Launcher tiles (a tile's options take their place).
     case launch
 
     var id: Self { self }
@@ -28,11 +28,11 @@ enum LivePage: String, CaseIterable, Identifiable {
     }
 }
 
-/// The Live tab: a vertical pager, one page at a time — trackpad (native paging), mouse wheel (one notch, one page),
-/// ↑/↓ or Page Up/Down while the island has the keyboard, or the dots on the right.
+/// The Live tab: a vertical pager, one page at a time — trackpad (native paging), mouse wheel (one notch, one page)
+/// or the dots on the right.
 ///
-/// Opens on Now when something runs, else on Music (also when the pointer came in over the media wing). "+", ⌃⌥Space
-/// and "Alarm…" (`model.showsLauncher`, a field focus request) jump to Launch; `model.showsLauncher` follows the page so "+" and Esc leave it. Nothing is
+/// Opens on Now when something runs, else on Music (also when the pointer came in over the media wing). "+" and
+/// ⌃⌥Space (`model.showsLauncher`) jump to Launch; `model.showsLauncher` follows the page so "+" leaves it. Nothing is
 /// remembered across openings: the page is view state, gone when the island closes.
 struct LiveTabView: View {
     let model: IslandModel
@@ -115,13 +115,12 @@ struct LiveTabView: View {
             input.start()
         }
         .onDisappear { input.stop() }
-        .onChange(of: LauncherSignal(shows: model.showsLauncher, focusRequest: model.fieldFocusRequest)) { old, new in
-            if new.focusRequest != old.focusRequest || (new.shows && !old.shows) {
+        .onChange(of: model.showsLauncher) { _, shows in
+            if shows {
                 go(.launch)
-            } else if old.shows, !new.shows, model.phase == .open,
-                      Self.resolve(page, in: Self.currentPages) == .launch {
-                // "+" or Esc leaving Launch. Not a close (it resets the flag too): sliding the pages inside the closing
-                // island would override its shrink animation and make it snap shut.
+            } else if model.phase == .open, Self.resolve(page, in: Self.currentPages) == .launch {
+                // "+" or a started activity leaving Launch. Not a close (it resets the flag too): sliding the pages
+                // inside the closing island would override its shrink animation and make it snap shut.
                 go(Self.defaultPage)
             }
         }
@@ -140,7 +139,7 @@ struct LiveTabView: View {
         case .calendar:
             CalendarAgendaView(isActive: isCurrent)
         case .launch:
-            LauncherView(model: model, actions: actions, isCurrent: isCurrent)
+            LauncherView(model: model, actions: actions)
         }
     }
 
@@ -166,13 +165,13 @@ struct LiveTabView: View {
         return pages.contains(fallback) ? fallback : pages[0]
     }
 
-    /// Launch when it was asked for (the panel is key only for the command field), Music when the pointer came in
-    /// over the media wing, else the default page.
+    /// Launch when it was asked for ("+", ⌃⌥Space), Music when the pointer came in over the media wing, else the
+    /// default page.
     private static func initialPage(_ model: IslandModel) -> LivePage {
         #if DEBUG
         if let forced = DebugPage.take() { return forced }
         #endif
-        if model.showsLauncher || model.isKey { return .launch }
+        if model.showsLauncher { return .launch }
         if model.focusedActivityID == NowPlayingActivity.activityID { return .music }
         return defaultPage
     }
@@ -194,45 +193,25 @@ struct LiveTabView: View {
     private func syncLauncher(with page: LivePage) {
         let onLaunch = page == .launch
         if model.showsLauncher != onLaunch { model.showsLauncher = onLaunch }
-        if !onLaunch, model.expandedLauncherID != nil { model.expandedLauncherID = nil }
+        if !onLaunch, model.expandedLauncherID != nil {
+            model.expandedLauncherID = nil
+            model.launcherError = nil
+        }
     }
 
-    // MARK: Mouse wheel and keyboard
+    // MARK: Mouse wheel
 
-    /// Returns true when the event was used (it then goes no further).
+    /// Returns true when the event was used (it then goes no further). The panel never has the keyboard: the wheel
+    /// is the only input to take over, it goes to the window under the pointer.
     private func handle(_ event: NSEvent) -> Bool {
         guard event.window is NotchPanel, model.phase == .open, model.tab == .live, !model.isFileDragActive else {
             return false
         }
-        switch event.type {
-        case .scrollWheel:
-            // Trackpads and smooth-scrolling mice page natively; a classic wheel's notch turns exactly one page.
-            guard !event.hasPreciseScrollingDeltas, event.scrollingDeltaY != 0,
-                  abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX) else { return false }
-            if input.acceptWheelStep() { step(event.scrollingDeltaY > 0 ? -1 : 1) }
-            return true
-        case .keyDown:
-            let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
-            guard model.isKey, !model.isEditing, modifiers.isEmpty else { return false }
-            switch event.keyCode {
-            case 126, 116: // ↑, Page Up
-                step(-1)
-                return true
-            case 125, 121: // ↓, Page Down
-                step(1)
-                return true
-            case 123, 124, 49, 51, 117: // ← → Space ⌫ ⌦: the controller applies them to the Now page's cards
-                let current = Self.resolve(page, in: Self.currentPages)
-                guard current != .now else { return false }
-                // Elsewhere they would act on cards nobody sees; on Music, Space plays and pauses.
-                if current == .music, event.keyCode == 49 { NowPlayingService.shared.playPause() }
-                return current != .launch
-            default:
-                return false
-            }
-        default:
-            return false
-        }
+        // Trackpads and smooth-scrolling mice page natively; a classic wheel's notch turns exactly one page.
+        guard !event.hasPreciseScrollingDeltas, event.scrollingDeltaY != 0,
+              abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX) else { return false }
+        if input.acceptWheelStep() { step(event.scrollingDeltaY > 0 ? -1 : 1) }
+        return true
     }
 }
 
@@ -272,14 +251,8 @@ private struct RestingPageSnap: ViewModifier {
     }
 }
 
-/// "+" / ⌃⌥Space / "Alarm…" as one value, so the page reacts once to a reset followed by a focus request.
-private struct LauncherSignal: Equatable {
-    var shows: Bool
-    var focusRequest: Int
-}
-
-/// Local event monitor (mouse wheel, keys) installed while the Live tab is on screen. Event-driven: nothing runs
-/// between events, and it only sees events sent to Islet's own windows.
+/// Local mouse wheel monitor installed while the Live tab is on screen. Event-driven: nothing runs between events,
+/// and it only sees events sent to Islet's own windows.
 @MainActor
 private final class PagerInput {
     var handler: ((NSEvent) -> Bool)?
@@ -288,7 +261,7 @@ private final class PagerInput {
 
     func start() {
         guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .keyDown]) { [weak self] event in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
             let used = MainActor.assumeIsolated { self?.handler?(event) ?? false }
             return used ? nil : event
         }
@@ -364,13 +337,11 @@ private struct NowPage: View {
 
     var body: some View {
         if items.count == 1 {
-            ActivityCardView(activity: items[0], actions: actions, highlighted: false)
+            ActivityCardView(activity: items[0], actions: actions)
         } else if items.count == 2 {
-            let focused = LiveItems.focused(items, focusedID: model.focusedActivityID)
             HStack(spacing: 8) {
                 ForEach(items, id: \.id) { activity in
-                    ActivityCardView(activity: activity, actions: actions,
-                                     highlighted: model.isKey && activity.id == focused?.id)
+                    ActivityCardView(activity: activity, actions: actions)
                         .onHover { inside in
                             if inside { model.focusedActivityID = activity.id }
                         }
@@ -386,7 +357,6 @@ private struct NowPage: View {
 private struct ActivityCardView: View {
     let activity: any LiveActivity
     let actions: IslandActions
-    let highlighted: Bool
 
     var body: some View {
         let center = ActivityCenter.shared
@@ -395,11 +365,6 @@ private struct ActivityCardView: View {
         activity.presentation.expanded()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .opacity(isHidden ? 0.6 : 1)
-            .overlay(
-                RoundedRectangle(cornerRadius: IsletTheme.cardRadius, style: .continuous)
-                    .strokeBorder(IsletTheme.accent.opacity(highlighted ? 0.8 : 0), lineWidth: 1.5)
-                    .allowsHitTesting(false)
-            )
             .contextMenu {
                 ForEach(activity.actions) { action in
                     Button(action.title) { action.perform() }
@@ -422,25 +387,27 @@ private struct ActivityCardView: View {
     }
 }
 
-/// 3+ activities: up to 4 rows (minimal view + title) and the selected card; more than 4 adds a "+N" menu (no nested
-/// scrolling inside the pager). The selected activity always has a row. Hovering a row selects it after 80 ms;
-/// clicking also works; ←/→ when the island is key.
+/// 3+ activities: up to 3 rows (minimal view + title) and the selected card; more than 3 keeps 3 rows and adds a
+/// "+N more" menu under them (no nested scrolling inside the pager). The selected activity always has a row.
+/// Hovering a row selects it after 80 ms; clicking also works.
 private struct ListDetailView: View {
     let items: [any LiveActivity]
     let model: IslandModel
     let actions: IslandActions
 
-    private static let maxRows = 4
+    private static let maxRows = 3
 
     var body: some View {
         let selected = LiveItems.focused(items, focusedID: model.focusedActivityID)
         let rows = visibleRows(selected: selected)
         let hidden = items.filter { item in !rows.contains { $0.id == item.id } }
 
-        HStack(spacing: 12) {
-            VStack(spacing: 2) {
+        HStack(spacing: 10) {
+            // 3 rows of 26 pt fill the page; with "+N more" under them they shrink to 24 pt.
+            VStack(spacing: hidden.isEmpty ? 3 : 0) {
                 ForEach(rows, id: \.id) { activity in
-                    ActivityRow(activity: activity, selected: activity.id == selected?.id) {
+                    ActivityRow(activity: activity, selected: activity.id == selected?.id,
+                                height: hidden.isEmpty ? 26 : 24) {
                         model.focusedActivityID = activity.id
                     }
                 }
@@ -449,10 +416,10 @@ private struct ListDetailView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .frame(width: 170)
+            .frame(width: 160)
 
             if let selected {
-                ActivityCardView(activity: selected, actions: actions, highlighted: false)
+                ActivityCardView(activity: selected, actions: actions)
             }
         }
     }
@@ -480,9 +447,9 @@ private struct MoreMenu: View {
             }
         } label: {
             Text(verbatim: "+\(items.count) more")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(IsletTheme.secondaryText)
-                .frame(height: 16)
+                .frame(height: 12)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
@@ -498,14 +465,17 @@ private struct MoreMenu: View {
 private struct ActivityRow: View {
     let activity: any LiveActivity
     let selected: Bool
+    let height: CGFloat
     let select: () -> Void
     @State private var hoverTask: Task<Void, Never>?
 
     var body: some View {
         let hidden = ActivityCenter.shared.isHidden(id: activity.id)
         HStack(spacing: 8) {
+            // Leading, so the rings line up whatever the value's width ("4m", "25m", "52%"); the closed island's
+            // wings center the same views.
             activity.presentation.minimal()
-                .frame(width: 52, height: 22)
+                .frame(width: 52, height: 22, alignment: .leading)
             Text(verbatim: activity.title)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(selected ? IsletTheme.primaryText : IsletTheme.secondaryText)
@@ -519,7 +489,7 @@ private struct ActivityRow: View {
             }
         }
         .padding(.horizontal, 6)
-        .frame(height: 30)
+        .frame(height: height)
         .background(
             RoundedRectangle(cornerRadius: IsletTheme.smallRadius, style: .continuous)
                 .fill(selected ? IsletTheme.cardHover : .clear)

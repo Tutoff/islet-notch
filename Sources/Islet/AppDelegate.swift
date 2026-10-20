@@ -169,8 +169,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Menus & lifecycle
 
-    /// Never shown (accessory app), but its key equivalents are what make ⌘W and ⌘Q work while Settings is key,
-    /// and ⌘C / ⌘V / ⌘A / ⌘Z in the island's command field.
+    /// Never shown (accessory app), but its key equivalents are what make ⌘W, ⌘Q and the editing shortcuts
+    /// (⌘C / ⌘V / ⌘A / ⌘Z in its text fields) work while Settings is key.
     private static func makeMainMenu() -> NSMenu {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "Quit Islet", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

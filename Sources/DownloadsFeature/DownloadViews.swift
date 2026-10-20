@@ -121,11 +121,11 @@ private struct DownloadDetail: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            FileIcon(name: item.name, size: 34)
-            VStack(alignment: .leading, spacing: 5) {
+            FileIcon(name: item.name, size: 30)
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(item.name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(IsletTheme.primaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -133,9 +133,11 @@ private struct DownloadDetail: View {
                     if item.isIndeterminate {
                         ProgressRing(.indeterminate, tint: activity.tint, lineWidth: 2)
                             .frame(width: 12, height: 12)
+                            // An NSView has no text baseline (SwiftUI uses its top): center it on the name's caps.
+                            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4.5 }
                     } else {
                         Text(DownloadFormat.percent(item.fraction))
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 12.5, weight: .semibold))
                             .monospacedDigit()
                             .foregroundStyle(IsletTheme.secondaryText)
                     }
@@ -165,11 +167,11 @@ private struct DownloadRows: View {
     let activity: DownloadActivity
 
     var body: some View {
-        FittingRows(items: activity.items, rowHeight: 16) { item in
+        FittingRows(items: activity.items, rowHeight: 15) { item in
             DownloadRow(activity: activity, item: item)
         } more: { hidden in
-            // Under the names: 16-pt icon + 8, less the menu button's own 3-pt inset.
-            MoreFilesMenu(count: hidden.count, leading: 21, help: "More downloads") {
+            // Under the names: 15-pt icon + 8, less the menu button's own 3-pt inset.
+            MoreFilesMenu(count: hidden.count, leading: 20, help: "More downloads") {
                 ForEach(hidden) { item in
                     let title = [item.name, activity.status(of: item)].filter { !$0.isEmpty }.joined(separator: " · ")
                     if item.isCancellable {
@@ -185,6 +187,8 @@ private struct DownloadRows: View {
     }
 }
 
+/// Icon, name, ring, "42%", ✕. A small ring rather than a bar, and a status column as wide as its text: the name
+/// keeps ≈ 110 pt in a half-width card.
 private struct DownloadRow: View {
     let activity: DownloadActivity
     let item: DownloadItem
@@ -192,34 +196,31 @@ private struct DownloadRow: View {
     var body: some View {
         let stalled = activity.isStalled(item)
         HStack(spacing: 8) {
-            FileIcon(name: item.name, size: 16)
+            FileIcon(name: item.name, size: 15)
             Text(item.name)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(IsletTheme.primaryText)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if item.isIndeterminate {
-                ProgressRing(.indeterminate, tint: activity.tint, lineWidth: 1.5)
-                    .frame(width: 10, height: 10)
-            } else {
-                DownloadBar(fraction: item.fraction,
-                            tint: stalled ? IsletTheme.warning : item.isPaused ? IsletTheme.secondaryText : activity.tint)
-                    .frame(width: 56, height: 3)
-            }
+            ProgressRing(item.isIndeterminate ? .indeterminate : .fraction(item.fraction),
+                         tint: stalled ? IsletTheme.warning : item.isPaused ? IsletTheme.secondaryText : activity.tint,
+                         lineWidth: 1.5)
+                .frame(width: 10, height: 10)
             Text(activity.status(of: item))
                 .font(.system(size: 11, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(stalled ? IsletTheme.warning : IsletTheme.secondaryText)
                 .lineLimit(1)
-                .frame(width: 46, alignment: .trailing)
+                .fixedSize()
+                .frame(minWidth: 28, alignment: .trailing)
             if item.isCancellable {
                 Button {
                     activity.controller?.cancel(item.id)
                 } label: {
                     Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
                 }
-                .buttonStyle(IslandIconButtonStyle(size: 16))
+                .buttonStyle(IslandIconButtonStyle(size: 15))
                 .help("Cancel")
                 .accessibilityLabel("Cancel \(item.name)")
             }
@@ -234,20 +235,20 @@ private struct FinishedDownloadList: View {
     let activity: DownloadActivity
 
     var body: some View {
-        FittingRows(items: activity.finished, rowHeight: 20) { file in
+        FittingRows(items: activity.finished, rowHeight: 15) { file in
             HStack(spacing: 8) {
-                DraggableFileIcon(urls: [file.url], name: file.name, size: 20) {
+                DraggableFileIcon(urls: [file.url], name: file.name, size: 15) {
                     activity.controller?.open([file.url])
                 }
                 Text(file.name)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(IsletTheme.primaryText)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
         } more: { hidden in
-            // Under the names: 20-pt icon + 8, less the menu button's own 3-pt inset.
-            MoreFilesMenu(count: hidden.count, leading: 25, help: "More files") {
+            // Under the names: 15-pt icon + 8, less the menu button's own 3-pt inset.
+            MoreFilesMenu(count: hidden.count, leading: 20, help: "More files") {
                 ForEach(hidden) { file in
                     Button(file.name) { activity.controller?.open([file.url]) }
                 }
@@ -258,8 +259,9 @@ private struct FinishedDownloadList: View {
 
 /// The first rows that fit the height given, then a "+N more" line for the rest. Not a scroll view: the card sits in
 /// the Live tab's vertical pager, which must get the trackpad's swipes over it too. Rows have a fixed height, so the
-/// count follows from the height alone (≈ 99 pt beside the card's buttons, ≈ 61 pt above them). Not ViewThatFits
-/// either: it would build every candidate's rings and bars to measure them.
+/// count follows from the height alone (≈ 48 pt beside the card's buttons: two rows and "+N more"; ≈ 36 pt under
+/// them: one). Not ViewThatFits either: it would build every candidate's rings and bars to measure them. Tells the
+/// card what it draws, so the card's buttons center on the rows.
 private struct FittingRows<Item: Identifiable, Row: View, More: View>: View {
     let items: [Item]
     let rowHeight: CGFloat
@@ -268,11 +270,12 @@ private struct FittingRows<Item: Identifiable, Row: View, More: View>: View {
 
     @State private var height: CGFloat?
 
-    private static var spacing: CGFloat { 6 }
-    private static var moreHeight: CGFloat { 16 }
+    private static var spacing: CGFloat { 3 }
+    private static var moreHeight: CGFloat { 12 }
 
     var body: some View {
         let shown = Self.shownCount(total: items.count, rowHeight: rowHeight, in: height)
+        let rows = CGFloat(shown) * rowHeight + CGFloat(max(0, shown - 1)) * Self.spacing
         VStack(alignment: .leading, spacing: Self.spacing) {
             ForEach(items.prefix(shown)) { item in
                 row(item).frame(height: rowHeight)
@@ -285,6 +288,8 @@ private struct FittingRows<Item: Identifiable, Row: View, More: View>: View {
         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
         .clipped()
         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height = $0 }
+        .cardContentExtent(height == nil ? nil : CardContentExtent(
+            height: shown < items.count ? rows + Self.spacing + Self.moreHeight : rows, barCenter: rows / 2))
     }
 
     /// Every row when they all fit, else as many as fit above the "+N more" line (at least one).
@@ -305,18 +310,9 @@ private struct MoreFilesMenu<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        Menu(content: content) {
-            Text(verbatim: "+\(count) more")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(IsletTheme.secondaryText)
-                .contentShape(Rectangle())
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help(help)
-        .padding(.leading, leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        MoreMenu(count: count, help: help, content: content)
+            .padding(.leading, leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

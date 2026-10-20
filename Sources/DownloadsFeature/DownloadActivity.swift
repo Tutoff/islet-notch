@@ -84,9 +84,10 @@ final class DownloadActivity: LiveActivity {
         return percentText
     }
 
-    /// Card title: the state for one file, "3 downloads · 42%" for several.
+    /// Card title: the state for one file, "3 downloads · 42%" for several; short enough for a half-width card beside
+    /// three buttons ("2 downloaded").
     var headline: String {
-        if isDone { return finished.count == 1 ? "Downloaded" : "\(finished.count) downloads finished" }
+        if isDone { return finished.count == 1 ? "Downloaded" : "\(finished.count) downloaded" }
         if items.count > 1 { return ["\(items.count) downloads", percentText].compactMap { $0 }.joined(separator: " · ") }
         if isStalled { return "Download stalled" }
         return isPaused ? "Download paused" : "Downloading"

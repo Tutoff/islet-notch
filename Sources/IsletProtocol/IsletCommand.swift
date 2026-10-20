@@ -72,7 +72,7 @@ public struct CustomActivityPayload: Codable, Equatable, Sendable {
     }
 }
 
-/// Everything that can be asked of Islet: from the command bar, `islet://` links, the CLI, menus.
+/// Everything that can be asked of Islet: from the launcher, `islet://` links, the CLI, menus.
 public enum IsletCommand: Codable, Equatable, Sendable {
     case timerStart(duration: TimeInterval, label: String?)
     /// `id == nil` targets the timer ending soonest.

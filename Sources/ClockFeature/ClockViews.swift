@@ -176,7 +176,6 @@ struct MinimalLayout<Leading: View, Value: View>: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -206,30 +205,6 @@ struct PillButton: View {
         .onHover { hovering = $0 }
         .animation(IsletTheme.quick, value: hovering)
         .accessibilityLabel(Text(verbatim: title))
-    }
-}
-
-/// Small preset chip ("5m", "Tea 4m").
-struct ChipButton: View {
-    let title: String
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Text(verbatim: title)
-                .font(.system(size: 10.5, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(IsletTheme.primaryText.opacity(0.85))
-                .lineLimit(1)
-                .padding(.horizontal, 7)
-                .frame(height: 18)
-                .background(Capsule().fill(hovering ? IsletTheme.cardHover : IsletTheme.card))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .accessibilityLabel(Text(verbatim: "Start \(title) timer"))
     }
 }
 

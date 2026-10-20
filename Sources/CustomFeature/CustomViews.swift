@@ -133,27 +133,31 @@ private struct LastMinuteCountdown: View {
 
 // MARK: - Open island
 
-/// Card in the Live tab: value (or subtitle) large, subtitle, bar; links and End as buttons.
+/// Card in the Live tab: value (or subtitle) large with the subtitle beside it, then the bar; links and End as
+/// buttons.
 struct CustomExpanded: View {
     let activity: CustomActivity
 
     var body: some View {
         ActivityCard(title: activity.title, symbol: activity.displaySymbol, tint: activity.displayTint,
                      actions: activity.actions) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     primary
+                    if hasValue, let subtitle = activity.subtitle {
+                        Text(verbatim: subtitle)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(IsletTheme.secondaryText)
+                            .lineLimit(1)
+                    }
                     if activity.ringMode == .indeterminate {
                         ProgressRing(.indeterminate, tint: activity.tint)
-                            .frame(width: 16, height: 16)
+                            .frame(width: 14, height: 14)
+                            // An NSView has no text baseline (SwiftUI uses its top): center it on the first line's
+                            // caps (24-pt value or 14-pt text).
+                            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + (hasValue ? 8 : 5) }
                     }
                     Spacer(minLength: 0)
-                }
-                if hasValue, let subtitle = activity.subtitle {
-                    Text(verbatim: subtitle)
-                        .font(.system(size: 12))
-                        .foregroundStyle(IsletTheme.secondaryText)
-                        .lineLimit(1)
                 }
                 if let progress = activity.progress {
                     FractionBar(fraction: progress, tint: activity.tint)
@@ -170,7 +174,7 @@ struct CustomExpanded: View {
 
     @ViewBuilder
     private var primary: some View {
-        let big = Font.system(size: 28, weight: .semibold).monospacedDigit()
+        let big = Font.system(size: 24, weight: .semibold).monospacedDigit()
         switch activity.value {
         case .text(let string):
             Text(verbatim: string).font(big).foregroundStyle(IsletTheme.primaryText)
@@ -181,7 +185,7 @@ struct CustomExpanded: View {
                 Text(verbatim: "\(Int((progress * 100).rounded()))%").font(big).foregroundStyle(IsletTheme.primaryText)
             } else {
                 Text(verbatim: activity.subtitle ?? (activity.needsInput ? "Needs your attention" : ""))
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(IsletTheme.primaryText)
                     .lineLimit(2)
             }

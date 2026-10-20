@@ -48,8 +48,7 @@ final class BadgesActivity: LiveActivity {
                         TotalBadge(fontSize: 9)
                     }
                     TotalBadge(fontSize: 10)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity))
+                })
             },
             expanded: { AnyView(BadgesCard()) }
         )

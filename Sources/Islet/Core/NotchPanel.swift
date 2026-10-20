@@ -1,12 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// Borderless, non-activating panel floating above the menu bar. Hovering or clicking it never
-/// steals focus from the frontmost app; it only becomes key for the command field (click or hotkey).
+/// Borderless, non-activating panel floating above the menu bar. It never becomes key: hovering, clicking or the
+/// hotkey never take the keyboard from the frontmost app (nothing in the island is typed into).
 final class NotchPanel: NSPanel {
-    /// Key presses while the panel is key, before the first responder sees them. Return true when handled.
-    var keyHandler: ((NSEvent) -> Bool)?
-
     init() {
         super.init(
             contentRect: .zero,
@@ -15,7 +12,6 @@ final class NotchPanel: NSPanel {
             defer: true
         )
         isFloatingPanel = true
-        becomesKeyOnlyIfNeeded = true
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
@@ -30,13 +26,8 @@ final class NotchPanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
     }
 
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
-
-    override func sendEvent(_ event: NSEvent) {
-        if event.type == .keyDown, let keyHandler, keyHandler(event) { return }
-        super.sendEvent(event)
-    }
 }
 
 /// Root view of the panel: reports hover through a single tracking area (no global mouse polling)
@@ -112,11 +103,6 @@ private final class FirstMouseHostingView<Content: View>: NSHostingView<Content>
     var fallbackMenu: (() -> NSMenu?)?
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    /// With a text field on screen the hosting view would make the panel key on any click (a launcher tile, a
-    /// play button), taking the keyboard from the frontmost app. Only the field itself (its own AppKit view)
-    /// needs that.
-    override var needsPanelToBecomeKey: Bool { false }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         super.menu(for: event) ?? fallbackMenu?()

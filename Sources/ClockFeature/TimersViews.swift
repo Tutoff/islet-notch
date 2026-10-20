@@ -94,43 +94,71 @@ struct TimersMinimal: View {
 
 struct TimersCard: View {
     let model: TimersActivity
+    @State private var rowsHeight: CGFloat?
+
+    private static let rowHeight: CGFloat = 20
+    private static let rowSpacing: CGFloat = 3
 
     var body: some View {
         let items = model.book.ordered
         let single = items.count == 1
-        ActivityCard(title: model.title, symbol: model.symbol, tint: model.tint, actions: single ? model.actions : []) {
-            // Up to 3 rows, "+N more", preset chips; chips then rows go first when the card is short.
-            ViewThatFits(in: .vertical) {
-                content(items, rows: 3, chips: true)
-                content(items, rows: 3, chips: false)
-                content(items, rows: 2, chips: false)
-                content(items, rows: 1, chips: false)
+        let shown = single ? 1 : Self.fitting(items.count, in: rowsHeight)
+        let hidden = Array(items.dropFirst(shown))
+        // Several timers: the title counts them all, the rows show as many as fit (two in a card) and "+N more" at
+        // the end of the title row (free: no buttons there) holds the others' controls.
+        ActivityCard(title: single ? model.title : "\(items.count) \(model.title)", symbol: model.symbol, tint: model.tint,
+                     actions: single ? model.actions : []) {
+            // No preset chips: the card has no room for them ("+" › Timer has them all).
+            if single {
+                TimerHero(item: items[0], model: model)
+            } else {
+                let drawn = CGFloat(shown) * Self.rowHeight + CGFloat(shown - 1) * Self.rowSpacing
+                VStack(alignment: .leading, spacing: Self.rowSpacing) {
+                    ForEach(items.prefix(shown)) { item in
+                        TimerRow(item: item, model: model)
+                    }
+                }
+                // The offered height, never the rows' (the count follows the card, not itself).
+                .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
+                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { rowsHeight = $0 }
+                .cardContentExtent(rowsHeight == nil ? nil : CardContentExtent(height: drawn))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        } accessory: {
+            if !hidden.isEmpty {
+                MoreMenu(count: hidden.count, help: "More timers") {
+                    ForEach(hidden) { item in
+                        Menu(menuTitle(item)) {
+                            if item.state == .finished {
+                                Button("Stop") { _ = model.cancel(id: item.id) }
+                            } else {
+                                ForEach(model.actions(for: item)) { action in
+                                    Button(action.title) { action.perform() }
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(height: 14)
+            }
         }
     }
 
-    private func content(_ items: [TimerItem], rows: Int, chips: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            if items.count == 1 {
-                TimerHero(item: items[0], model: model)
-            } else {
-                ForEach(items.prefix(rows)) { item in
-                    TimerRow(item: item, model: model)
-                }
-                if items.count > rows {
-                    Text(verbatim: "+\(items.count - rows) more")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(IsletTheme.tertiaryText)
-                }
-            }
-            if chips, items.count < TimerBook.maxTimers {
-                // The single-timer card has its action buttons at the bottom right: keep clear of them.
-                TimerPresetChips(model: model)
-                    .padding(.trailing, items.count == 1 ? 108 : 0)
-                    .padding(.top, 2)
-            }
+    /// Rows of 20 pt that fit the height (at least one); two until it is known.
+    private static func fitting(_ total: Int, in height: CGFloat?) -> Int {
+        guard let height else { return min(total, 2) }
+        let rows = Int(((height + rowSpacing) / (rowHeight + rowSpacing) + 0.01).rounded(.down))
+        return min(total, max(1, rows))
+    }
+
+    /// "Tea · ends at 10:25", "Pasta · paused, 4:12 left", "Laundry · done": static (the menu doesn't tick).
+    private func menuTitle(_ item: TimerItem) -> String {
+        let state: String
+        switch item.state {
+        case .running: state = item.endDate.map { "ends at \(ClockText.timeOfDay($0))" } ?? "running"
+        case .paused: state = "paused, \(ClockText.clock(item.remaining(at: Date()))) left"
+        case .finished: state = "done"
         }
+        return "\(item.displayName) · \(state)"
     }
 }
 
@@ -140,9 +168,9 @@ private struct TimerHero: View {
     let model: TimersActivity
 
     var body: some View {
-        HStack(spacing: 10) {
-            TimerRing(item: item, tint: model.tint, lineWidth: 3.5, bellSize: 18)
-                .frame(width: 30, height: 30)
+        HStack(spacing: 9) {
+            TimerRing(item: item, tint: model.tint, lineWidth: 3.2, bellSize: 16)
+                .frame(width: 26, height: 26)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Group {
                     switch item.state {
@@ -154,7 +182,7 @@ private struct TimerHero: View {
                         Text("Done")
                     }
                 }
-                .font(.system(size: 28, weight: .semibold))
+                .font(.system(size: 26, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(item.state == .paused ? IsletTheme.secondaryText : IsletTheme.primaryText)
 
@@ -227,41 +255,6 @@ private struct TimerRow: View {
                       label: item.state == .finished ? "Stop \(name)" : "Cancel \(name)") {
             _ = model.cancel(id: item.id)
         }
-    }
-}
-
-/// [1m][3m][5m][10m][15m][25m] + recents, as many as fit.
-private struct TimerPresetChips: View {
-    let model: TimersActivity
-
-    private struct Preset: Identifiable {
-        let title: String
-        let duration: TimeInterval
-        let label: String?
-        var id: String { title }
-    }
-
-    var body: some View {
-        let presets = TimersActivity.presets.map { Preset(title: TimersActivity.presetTitle(duration: $0, label: nil), duration: $0, label: nil) }
-        let recents = model.recents.map {
-            Preset(title: TimersActivity.presetTitle(duration: $0.duration, label: $0.label), duration: $0.duration, label: $0.label)
-        }.filter { recent in !presets.contains { $0.title == recent.title } }
-
-        ViewThatFits(in: .horizontal) {
-            chips(presets + recents)
-            chips(presets + recents.prefix(1))
-            chips(presets)
-            chips(Array(presets.prefix(4)))
-        }
-    }
-
-    private func chips(_ list: [Preset]) -> some View {
-        HStack(spacing: 4) {
-            ForEach(list) { preset in
-                ChipButton(title: preset.title) { _ = model.start(duration: preset.duration, label: preset.label) }
-            }
-        }
-        .fixedSize()
     }
 }
 

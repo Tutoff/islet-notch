@@ -42,8 +42,9 @@ public struct NowPlayingCompactTrailing: View {
 
 // MARK: - Open island
 
-/// The open island's Music page (≈ 480×144 pt): the artwork nearly edge to edge on the left; title, artist, a short
-/// progress bar and the controls (in the artwork's color) beside it. Scales down to smaller containers.
+/// The open island's Music page (≈ 490×84 pt): the artwork the page's full height on the left; title, artist and a
+/// short progress bar beside it; the controls (in the artwork's color) on the right. In a smaller container the
+/// artwork follows the height and the text gives way.
 @MainActor
 public struct NowPlayingExpandedView: View {
     private let service: NowPlayingService
@@ -60,8 +61,8 @@ public struct NowPlayingExpandedView: View {
         self.isActive = isActive
     }
 
-    /// Width of the progress block and the controls under it: short on purpose, it follows the text, not the page.
-    private static let progressWidth: CGFloat = 264
+    /// The progress bar follows the text, not the page: short on purpose.
+    private static let progressWidth: CGFloat = 250
 
     public var body: some View {
         // A ZStack, not a Group: a Group would hand onAppear to each branch and refresh again when
@@ -84,41 +85,38 @@ public struct NowPlayingExpandedView: View {
 
     private func player(_ track: NowPlayingTrack) -> some View {
         let tint = service.accentColor ?? IsletTheme.primaryText
-        return HStack(spacing: 18) {
+        return HStack(spacing: 14) {
             artwork(track)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: track.title.isEmpty ? "Unknown Title" : track.title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 15.5, weight: .semibold))
                     .foregroundStyle(IsletTheme.primaryText)
-                    .lineLimit(1)
                 Text(verbatim: subtitle(for: track))
-                    .font(.system(size: 14))
+                    .font(.system(size: 12.5))
                     .foregroundStyle(IsletTheme.secondaryText)
-                    .lineLimit(1)
-                    .padding(.top, 2)
-
-                VStack(spacing: 6) {
-                    PlaybackProgress(track: track, isPlaying: service.isPlaying, isActive: isActive, tint: tint)
-                    if service.automationDenied {
-                        // The player refused our Apple Events: dead buttons would only flicker.
-                        AutomationAccessButton(appName: service.sourceAppName, action: service.openAutomationSettings)
-                            .frame(height: 40)
-                    } else {
-                        controls(tint: tint)
-                    }
-                }
-                .frame(maxWidth: Self.progressWidth)
-                .padding(.top, 14)
+                    .padding(.top, 1)
+                PlaybackProgress(track: track, isPlaying: service.isPlaying, isActive: isActive, tint: tint)
+                    .frame(maxWidth: Self.progressWidth)
+                    .padding(.top, 9)
             }
+            .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            if service.automationDenied {
+                // The player refused our Apple Events: dead buttons would only flicker.
+                AutomationAccessButton(appName: service.sourceAppName, action: service.openAutomationSettings)
+                    .frame(maxWidth: 180)
+            } else {
+                controls(tint: tint)
+            }
         }
     }
 
     private func artwork(_ track: NowPlayingTrack) -> some View {
         Button(action: service.openSourceApp) {
             ArtworkThumbnail(artwork: track.artwork, fallbackIcon: service.sourceIcon,
-                             cornerRadius: 14, symbolSize: 40)
+                             cornerRadius: 12, symbolSize: 30)
                 .aspectRatio(1, contentMode: .fit)
                 .overlay(alignment: .bottomTrailing) {
                     // A browser's thumbnail or a podcast's cover doesn't say where it plays: the app's icon does.
@@ -126,65 +124,65 @@ public struct NowPlayingExpandedView: View {
                         Image(nsImage: icon)
                             .resizable()
                             .interpolation(.high)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 22, height: 22)
                             .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
-                            .padding(6)
+                            .padding(4)
                     }
                 }
-                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(service.sourceAppName.map { "Open \($0)" } ?? "Open player")
     }
 
     private func controls(tint: Color) -> some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 6) {
             Button(action: service.previous) {
                 Image(systemName: "backward.fill")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(tint)
             }
-            .buttonStyle(IslandIconButtonStyle(size: 38))
+            .buttonStyle(IslandIconButtonStyle(size: 34))
             .accessibilityLabel("Previous track")
 
             Button(action: service.playPause) {
                 Image(systemName: service.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(tint)
                     .contentTransition(.symbolEffect(.replace))
             }
-            .buttonStyle(IslandIconButtonStyle(size: 42))
+            .buttonStyle(IslandIconButtonStyle(size: 44))
             .background(Circle().fill(tint.opacity(0.16)))
             .accessibilityLabel(service.isPlaying ? "Pause" : "Play")
 
             Button(action: service.next) {
                 Image(systemName: "forward.fill")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(tint)
             }
-            .buttonStyle(IslandIconButtonStyle(size: 38))
+            .buttonStyle(IslandIconButtonStyle(size: 34))
             .accessibilityLabel("Next track")
         }
-        .frame(maxWidth: .infinity)
+        .fixedSize()
     }
 
     private var emptyState: some View {
-        HStack(spacing: 18) {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+        HStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(IsletTheme.card)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .strokeBorder(IsletTheme.stroke, lineWidth: 1)
                 )
                 .overlay(
                     Image(systemName: "music.note")
-                        .font(.system(size: 36, weight: .medium))
+                        .font(.system(size: 28, weight: .medium))
                         .foregroundStyle(IsletTheme.tertiaryText)
                 )
                 .aspectRatio(1, contentMode: .fit)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Nothing playing")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 15.5, weight: .semibold))
                     .foregroundStyle(IsletTheme.primaryText)
                 if let deniedName = service.deniedPlayerName {
                     // A running player refused our Apple Events, so its track can't be read until allowed.
@@ -194,10 +192,11 @@ public struct NowPlayingExpandedView: View {
                     // With MediaRemote, browsers, Podcasts, TV… show up too.
                     Text(service.mediaRemoteStatus == .active ? "Play music, a podcast or a video"
                                                               : "Play something in Music or Spotify")
-                        .font(.system(size: 13))
+                        .font(.system(size: 12.5))
                         .foregroundStyle(IsletTheme.secondaryText)
                 }
             }
+            .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }

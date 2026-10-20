@@ -1,7 +1,7 @@
 import SwiftUI
 import IsletUI
 
-/// Shown while a file drag is in progress: big "Shelf" and "AirDrop" drop zones side by side (≈ 540×130 pt).
+/// Shown while a file drag is in progress: "Shelf" and "AirDrop" drop zones side by side (≈ 250×84 pt each).
 ///
 /// One drop target covers the whole view and picks the zone from the drop location. SwiftUI hosts each drop
 /// target in an AppKit view whose container sits at the hosting view's origin: a target further right falls
@@ -102,17 +102,20 @@ private struct ShelfDropZone: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: IsletTheme.cardRadius, style: .continuous)
-        VStack(spacing: 5) {
+        HStack(spacing: 10) {
             Image(systemName: symbol)
-                .font(.system(size: 24, weight: .medium))
-                .frame(height: 28)
-            Text(title)
-                .font(.system(size: 14, weight: .semibold))
-            Text(subtitle)
-                .font(.system(size: 11))
-                .foregroundStyle(IsletTheme.secondaryText)
-                .lineLimit(1)
+                .font(.system(size: 22, weight: .medium))
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(IsletTheme.secondaryText)
+            }
+            .lineLimit(1)
         }
+        .padding(.horizontal, 10)
         .foregroundStyle(targeted ? IsletTheme.accent : IsletTheme.primaryText)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(shape.fill(targeted ? IsletTheme.accent.opacity(0.14) : IsletTheme.card))

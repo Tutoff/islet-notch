@@ -74,24 +74,25 @@ L'île fermée montre ce qui tourne, comme sur iPhone :
 - **alertes** : un minuteur qui sonne déploie une carte « Thé · Terminé » avec Stop / +1 min / Recommencer ;
 - **notifications éphémères** : chargeur branché, AirPods connectés, fichiers ajoutés à l'étagère (2–3 s).
 
-Survoler l'île l'ouvre sur l'onglet **Live**, fait de pages verticales qu'on fait défiler une à une (deux
-doigts sur le trackpad, un cran de molette, ↑/↓ quand l'île a le clavier, ou les points à droite) :
+Survoler l'île l'ouvre sur l'onglet **Live** (552 × 128 pt), fait de pages verticales qu'on fait défiler une à
+une (deux doigts sur le trackpad, un cran de molette, ou les points à droite) :
 
 - **Maintenant** (seulement si quelque chose tourne) : les activités en cours, minuteurs, chrono, Pomodoro,
   Keep Awake, appel, téléchargements, minuteurs de l'app Horloge, activités personnalisées, non-lus. Une
-  carte, deux cartes côte à côte, ou à partir de trois une liste (4 lignes, puis « +N ») et la carte choisie ;
-- **Musique** : ce qui joue (ou est en pause) en grand, pochette presque bord à bord, titre, artiste, barre
-  de progression courte et commandes aux couleurs de la pochette ; « Nothing playing » sinon ;
+  carte, deux cartes côte à côte, ou à partir de trois une liste (3 lignes, puis « +N ») et la carte choisie ;
+- **Musique** : ce qui joue (ou est en pause), pochette sur toute la hauteur, titre, artiste, barre de
+  progression courte, et à droite les commandes aux couleurs de la pochette ; « Nothing playing » sinon ;
 - **Calendrier** : une tuile avec la date du jour (comme l'icône de l'app Calendrier) et les prochains
-  événements, ce qui reste d'aujourd'hui puis demain (4 au plus, badge « Now » pour celui en cours, bouton
-  Join pour un appel vidéo). Avant la connexion, la tuile et « Connect Calendar… » (la permission n'est
-  demandée qu'à ce clic) ;
-- **Lancer** : les tuiles Minuteur, Chrono, Pomodoro, Alarme, Keep Awake et Réunions sur deux rangées, puis
-  la barre de commande (les préréglages d'une tuile prennent sa place, « Custom… » la ramène).
+  événements, ce qui reste d'aujourd'hui puis demain (3 au plus, une ligne chacun : heure ou badge « Now »,
+  titre, salle, bouton Join pour un appel vidéo). Avant la connexion, la tuile et « Connect Calendar… » (la
+  permission n'est demandée qu'à ce clic) ;
+- **Lancer** : les tuiles Minuteur, Chrono, Pomodoro, Alarme, Keep Awake et Réunions sur deux rangées.
+  Minuteur et Keep Awake affichent leurs préréglages à la place des tuiles (avec un bouton retour) ; Alarme
+  ouvre les réglages des alarmes (Réglages › Live Activities).
 
-L'île s'ouvre sur Maintenant quand quelque chose tourne, sinon sur Musique ; le bouton « + » de l'en-tête,
-**⌃⌥Espace** et « Alarme… » mènent à Lancer, curseur dans la barre de commande. Rien n'est mémorisé d'une
-ouverture à l'autre. Une page sortie de l'écran s'arrête (plus aucune seconde ne s'y rafraîchit). L'en-tête
+L'île s'ouvre sur Maintenant quand quelque chose tourne, sinon sur Musique ; le bouton « + » de l'en-tête et
+**⌃⌥Espace** (depuis n'importe où, sans prendre le clavier à l'app active) mènent à Lancer. Rien n'est
+mémorisé d'une ouverture à l'autre. Une page sortie de l'écran s'arrête (plus aucune seconde ne s'y rafraîchit). L'en-tête
 n'affiche plus la batterie : elle est juste à côté, dans la barre des menus (les notices branché / batterie
 faible restent).
 
@@ -101,7 +102,7 @@ faible restent).
 | Chrono | Tours, pause, remise à zéro |
 | Pomodoro | 25/5/15 min, pauses lancées automatiquement, compteur du jour, détection d'absence |
 | Keep Awake | Empêche la mise en veille (30 min, 1 h, 2 h, ∞) |
-| Alarmes | Heure, jours de la semaine, répétition 9 min. Le Mac doit être allumé |
+| Alarmes | Heure, jours de la semaine, répétition 9 min, créées dans Réglages › Live Activities › Alarmes (la tuile Alarme y mène), par `islet alarm` ou `islet://alarm`. Le Mac doit être allumé |
 | Micro et caméra | Indique quelle app utilise le micro, avec un bouton muet |
 | Appel en cours | L'app en appel et la durée (voir « Connexions aux apps ») |
 | Pastilles non lues | Total des pastilles du Dock de tes apps, une tuile par app (voir « Connexions aux apps ») |
@@ -159,11 +160,10 @@ Ouvrir. Les indicateurs micro et caméra ne doublent plus l'appel. Réglage « S
 
 | Moyen | Exemple |
 | --- | --- |
-| Barre de commande (onglet Live, ou **⌃⌥Espace** depuis n'importe où) | `25m` · `thé 4m` · `+5` · `pomo` · `chrono` · `réveil 7h30 sport` · `awake 2h` |
+| Page Lancer (bouton « + », ou **⌃⌥Espace** depuis n'importe où) | Minuteur de 1 à 25 min, chrono, Pomodoro, Keep Awake 30 min à ∞, en un clic |
 | Clic droit sur l'île | Nouveau minuteur, chrono, Keep Awake, et les actions de chaque activité (épingler, masquer 10 min) |
-| Clavier quand l'île a le focus | ↑/↓ changer de page ; sur Maintenant ←/→ choisir une activité, Espace pause/reprise, ⌫ terminer ; sur Musique Espace lecture/pause ; Échap fermer |
 | Liens `islet://` (Raccourcis, Raycast, Alfred) | `islet://timer/start?d=25m&label=Thé` · `islet://stopwatch/start` · `islet://awake?d=2h` · `islet://open?tab=shelf` |
-| Ligne de commande | `islet timer 25m --label Thé` · `islet status` · `islet open clock` (ouvre l'app Horloge) |
+| Ligne de commande | `islet timer 25m --label Thé` · `islet "réveil 7h30 sport"` · `islet status` · `islet open clock` (ouvre l'app Horloge) |
 
 Les liens `islet://` n'acceptent que des commandes sans risque. Les activités personnalisées passent
 uniquement par l'outil en ligne de commande, pour qu'une page web ne puisse pas en afficher.
@@ -177,7 +177,7 @@ sudo ln -sf /Applications/Islet.app/Contents/Helpers/islet /usr/local/bin/islet
 ```
 
 ```bash
-islet "thé 4m"                         # même syntaxe que la barre de commande
+islet "thé 4m"                         # langage naturel : 25m, +5, pomo, chrono, réveil 7h30, awake 2h
 islet timer list
 islet pomodoro skip
 islet alarm 7:30 --label Sport --days weekdays
@@ -234,7 +234,7 @@ puis supprimé quand on vide l'étagère ou qu'on quitte.
 ```
 Sources/
   IsletUI/            thème partagé
-  IsletProtocol/      vocabulaire de commandes (barre de commande, liens, CLI), Foundation seulement
+  IsletProtocol/      vocabulaire de commandes (langage naturel, liens, CLI), Foundation seulement
   ActivityCore/       moteur : contrat LiveActivity, classement et mise en page de l'île fermée,
                       file d'alertes et de notifications, planificateur unique, horloge 1 Hz, anneau Core Animation
   ClockFeature/       minuteurs, chrono, Pomodoro, Keep Awake, alarmes

@@ -146,7 +146,6 @@ struct ClockAppMinimal: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -157,22 +156,29 @@ struct ClockAppCard: View {
 
     var body: some View {
         let items = model.items
-        ActivityCard(title: model.title, symbol: model.symbol, tint: model.tint, actions: model.actions) {
-            VStack(alignment: .leading, spacing: 3) {
-                if items.count == 1 {
-                    ClockAppHero(item: items[0], model: model)
-                } else {
-                    // Up to 3 rows and "+N more"; fewer when the card is short.
-                    ViewThatFits(in: .vertical) {
-                        rows(items, limit: 3)
-                        rows(items, limit: 2)
-                        rows(items, limit: 1)
+        // Several: the title counts them all ("3 Clock Timers"), only here (menus and VoiceOver keep the model's).
+        ActivityCard(title: items.count > 1 ? "\(items.count) \(model.title)" : model.title, symbol: model.symbol,
+                     tint: model.tint, actions: model.actions) {
+            if items.count == 1 {
+                // "[Clock icon] Clock" at the end of the line when the width allows: controls happen there.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        ClockAppHero(item: items[0], model: model)
+                        Spacer(minLength: 0)
+                        ClockAppSourceLabel()
                     }
+                    ClockAppHero(item: items[0], model: model)
                 }
-                Spacer(minLength: 0)
-                ClockAppSourceLabel()
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                // As many rows as fit (two in a card); the title counts them all.
+                ViewThatFits(in: .vertical) {
+                    rows(items, limit: 3)
+                    rows(items, limit: 2)
+                    rows(items, limit: 1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
@@ -180,11 +186,6 @@ struct ClockAppCard: View {
         VStack(alignment: .leading, spacing: 3) {
             ForEach(items.prefix(limit)) { item in
                 ClockAppRow(item: item, model: model)
-            }
-            if items.count > limit {
-                Text(verbatim: "+\(items.count - limit) more")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(IsletTheme.tertiaryText)
             }
         }
     }
@@ -196,10 +197,10 @@ private struct ClockAppHero: View {
     let model: ClockAppActivity
 
     var body: some View {
-        HStack(spacing: 10) {
-            ClockAppRing(item: item, tint: model.tint, ringingSymbol: model.ringingSymbol, lineWidth: 3.5, bellSize: 18,
-                         glyphSize: 12)
-                .frame(width: 30, height: 30)
+        HStack(spacing: 9) {
+            ClockAppRing(item: item, tint: model.tint, ringingSymbol: model.ringingSymbol, lineWidth: 3.2, bellSize: 16,
+                         glyphSize: 11)
+                .frame(width: 26, height: 26)
             // The card's title is the item's name.
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Group {
@@ -211,7 +212,7 @@ private struct ClockAppHero: View {
                         if model.kind == .timers { Text("Done") } else { Text(verbatim: ClockAppText.timeOfDay(since)) }
                     }
                 }
-                .font(.system(size: 28, weight: .semibold))
+                .font(.system(size: 26, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(item.isPaused ? IsletTheme.secondaryText : IsletTheme.primaryText)
 

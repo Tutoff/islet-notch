@@ -27,11 +27,12 @@ final class IslandModel {
         /// Narrow, but two activity cards side by side keep the ≈ 240 pt a timer card needs ("24:59  Ends at 10:50 PM").
         /// The header (tabs · 179 pt notch · + ⋯) fits with room to spare.
         static let openWidth: CGFloat = 552
-        /// One Live page: two rows of launcher tiles and the command field, or the artwork nearly edge to edge.
-        static let openContentHeight: CGFloat = 160
+        /// Under the header row: one Live page of ≈ 84 pt (two rows of launcher tiles, the artwork edge to edge, an
+        /// activity card), so the open island is 128 pt tall with the 32-pt notch.
+        static let openContentHeight: CGFloat = 96
         /// Margins of the open island's content under the header row.
-        static let openContentTop: CGFloat = 4
-        static let openContentBottom: CGFloat = 12
+        static let openContentTop: CGFloat = 2
+        static let openContentBottom: CGFloat = 10
         static let peekExtraWidth: CGFloat = 64
         static let peekExtraHeight: CGFloat = 30
         static let alertWidth: CGFloat = 440
@@ -50,20 +51,13 @@ final class IslandModel {
     /// Activity selected in the open island (the wing the pointer came in over, a list row, the alert's).
     /// Nil: the highest priority one.
     var focusedActivityID: String?
-    /// The Live tab shows its Launch page ("+", ⌃⌥Space, "Alarm…" set it; `LiveTabView` keeps it in sync with the page
-    /// the user scrolls to, so "+" and Esc always mean "leave the launcher").
+    /// The Live tab shows its Launch page ("+" and ⌃⌥Space set it; `LiveTabView` keeps it in sync with the page the
+    /// user scrolls to, so "+" always means "leave the launcher").
     var showsLauncher = false
-    /// Launcher tile whose options (timer presets, Keep Awake durations) are revealed.
+    /// Launcher tile whose options (timer presets, Keep Awake durations) take the place of the tiles.
     var expandedLauncherID: String?
-    var commandText = ""
-    /// Last command that failed from the island ("No timer to add to"), cleared on the next edit.
-    var commandError: String?
-    /// The command field has keyboard focus: hover exit doesn't close the island.
-    var isEditing = false
-    /// The panel is the key window (opened by the hotkey or the command field): keyboard shortcuts work.
-    var isKey = false
-    /// Incremented to ask the command field to take focus (once the panel is key).
-    var fieldFocusRequest = 0
+    /// Last launcher option that failed ("Up to 5 timers"), shown beside the options until the next choice.
+    var launcherError: String?
     private(set) var notchSize: CGSize
 
     init(notchSize: CGSize) {
@@ -78,8 +72,7 @@ final class IslandModel {
     func resetOpenState() {
         showsLauncher = false
         expandedLauncherID = nil
-        commandText = ""
-        commandError = nil
+        launcherError = nil
     }
 
     // MARK: - Closed layout

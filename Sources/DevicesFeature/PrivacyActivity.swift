@@ -228,28 +228,23 @@ private struct PrivacyCard: View {
 
     var body: some View {
         ActivityCard(title: activity.title, symbol: activity.symbol, tint: activity.tint, actions: activity.actions) {
-            HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
                 if activity.showsMic, let icon = activity.otherMicApps.first?.icon {
                     Image(nsImage: icon)
                         .resizable()
                         .interpolation(.high)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 30, height: 30)
                         .accessibilityHidden(true)
                 }
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(verbatim: activity.headline)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(IsletTheme.primaryText)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if activity.showsMic, let device = activity.inputDeviceName {
-                        detail(symbol: activity.isMuted ? "mic.slash.fill" : "mic.fill",
-                               tint: activity.isMuted ? IsletTheme.danger : IsletTheme.secondaryText,
-                               text: activity.isMuted ? "\(device) · Muted" : device)
-                    }
-                    if activity.showsCamera {
-                        detail(symbol: "video.fill", tint: IsletTheme.privacyGreen,
-                               text: activity.showsMic ? "Camera in use · \(activity.cameraDescription)" : activity.cameraDescription)
+                        .lineLimit(1)
+                    // Microphone and camera on one line, the camera's description dropped when narrow.
+                    ViewThatFits(in: .horizontal) {
+                        details(full: true)
+                        details(full: false)
                     }
                 }
                 Spacer(minLength: 0)
@@ -257,6 +252,20 @@ private struct PrivacyCard: View {
         }
         // Process attribution can lag behind (a second app joining a running device): re-read when looked at.
         .onAppear { activity.cardAppeared() }
+    }
+
+    private func details(full: Bool) -> some View {
+        HStack(spacing: 10) {
+            if activity.showsMic, let device = activity.inputDeviceName {
+                detail(symbol: activity.isMuted ? "mic.slash.fill" : "mic.fill",
+                       tint: activity.isMuted ? IsletTheme.danger : IsletTheme.secondaryText,
+                       text: activity.isMuted ? "\(device) · Muted" : device)
+            }
+            if activity.showsCamera {
+                detail(symbol: "video.fill", tint: IsletTheme.privacyGreen,
+                       text: full || !activity.showsMic ? activity.cameraDescription : "Camera")
+            }
+        }
     }
 
     private func detail(symbol: String, tint: Color, text: String) -> some View {

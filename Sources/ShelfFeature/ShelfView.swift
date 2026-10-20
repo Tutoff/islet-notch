@@ -1,7 +1,8 @@
 import SwiftUI
 import IsletUI
 
-/// Full shelf tab, fills the frame it is given (≈ 540×130 pt).
+/// Full shelf tab, fills the frame it is given (≈ 500×84 pt): a header row, then one row of tiles that scrolls
+/// sideways.
 @MainActor
 public struct ShelfView: View {
     private let store: ShelfStore
@@ -15,7 +16,7 @@ public struct ShelfView: View {
     private var showsDropHighlight: Bool { isTargeted && !store.isDraggingOut }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             header
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -56,15 +57,15 @@ public struct ShelfView: View {
                 headerButton("Clear Shelf", symbol: "xmark.circle") { store.clear() }
             }
         }
-        .frame(height: 26)
+        .frame(height: 24)
     }
 
     private func headerButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 11.5, weight: .medium))
         }
-        .buttonStyle(IslandIconButtonStyle(size: 26))
+        .buttonStyle(IslandIconButtonStyle(size: 24))
         .help(title)
         .accessibilityLabel(title)
     }
@@ -144,7 +145,7 @@ struct ShelfStackHandle: View {
         }
         .foregroundStyle(IsletTheme.primaryText)
         .padding(.horizontal, 10)
-        .frame(height: 24)
+        .frame(height: 22)
         .background(Capsule().fill(hovering ? IsletTheme.cardHover : IsletTheme.card))
         .overlay(Capsule().strokeBorder(IsletTheme.stroke, lineWidth: 1))
         .overlay(

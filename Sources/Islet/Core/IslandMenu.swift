@@ -1,6 +1,5 @@
 import AppKit
 import ActivityCore
-import CalendarFeature
 
 /// The right-click quick menu: start an activity from any launcher, then control each running one (its
 /// actions, pin, hide for 10 min). Built on demand, released when it closes.
@@ -9,8 +8,6 @@ enum IslandMenu {
     struct Handlers {
         /// Runs a launcher command.
         var run: (IsletCommand) -> Void
-        /// Opens the launcher with this text in the command field ("" for a custom timer, "at " for alarms).
-        var openLauncher: (String) -> Void
         var openSettings: () -> Void
     }
 
@@ -30,16 +27,9 @@ enum IslandMenu {
                     let command = option.command
                     submenu.addItem(ClosureMenuItem(title: option.title) { handlers.run(command) })
                 }
-                if launcher.prefill == nil, case .timerStart = launcher.options.first?.command {
-                    submenu.addItem(.separator())
-                    submenu.addItem(ClosureMenuItem(title: "Custom…") { handlers.openLauncher("") })
-                }
                 item.submenu = submenu
-            } else if let prefill = launcher.prefill {
-                item.title += "…"
-                item.handler = { handlers.openLauncher(prefill) }
-            } else if launcher.id == CalendarFeature.launcherID {
-                item.handler = { CalendarFeature.openFromLauncher() }
+            } else if let open = launcher.open {
+                item.handler = open
             } else {
                 continue
             }

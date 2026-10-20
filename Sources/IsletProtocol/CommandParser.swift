@@ -1,6 +1,6 @@
 import Foundation
 
-/// Natural input from the command bar and the CLI (English and French):
+/// Natural input from the CLI (English and French):
 /// `25`, `25m`, `1h30`, `90s`, `5:00` → timer · `tea 4m`, `4m pâtes` → labelled timer · `+5` → add to the
 /// soonest timer · `at 7:30`, `à 7h30`, `réveil 7h30 gym`, `gym at 6`, `réveil 7h lundis` → alarm ·
 /// `sw`, `chrono` → stopwatch · `pomo`, `focus` → Pomodoro · `awake 2h`, `caf ∞` → Keep Awake.
@@ -35,12 +35,6 @@ public enum CommandParser {
         return timerCommand(tokens)
     }
 
-    /// What Return will do, for the live preview under the field (e.g. "Timer · 25:00 · Tea").
-    public static func preview(_ text: String) -> String? {
-        guard let command = parse(text) else { return nil }
-        return describe(command)
-    }
-
     /// `25m`, `1h30`, `1h30m`, `90s`, `5:00`, `1:30:00`, `25` (bare number = minutes). Nil unless the whole
     /// text is one positive duration. No upper limit here: callers apply their own (`maxDuration`).
     public static func duration(_ text: String) -> TimeInterval? {
@@ -63,7 +57,7 @@ public enum CommandParser {
         return (match.hour, match.minute)
     }
 
-    /// Human description of a command, as shown by `preview`.
+    /// Human description of a command ("Timer · 25:00 · Tea"), for result messages.
     public static func describe(_ command: IsletCommand) -> String {
         switch command {
         case .timerStart(let duration, let label):

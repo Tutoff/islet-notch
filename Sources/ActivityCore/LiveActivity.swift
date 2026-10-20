@@ -30,7 +30,7 @@ public enum ActivityRole: Sendable {
     case passive
 }
 
-/// One control. The same list drives card buttons, the right-click menu, keyboard shortcuts, URLs and the CLI.
+/// One control. The same list drives card buttons, the right-click menu, URLs and the CLI.
 public struct ActivityAction: Identifiable {
     public enum Role: Sendable {
         case primary
@@ -69,7 +69,8 @@ public struct ActivityPresentation {
     /// One wing in the split layout (≈ notch height + 20 pt wide, notch height − 8 pt tall), also the
     /// glyph + live value of list rows. Live data, not just a logo.
     public var minimal: @MainActor () -> AnyView
-    /// Card in the open island. Must adapt to the width it gets (≈ 280 to 540 pt) and ≈ 120 pt of height.
+    /// Card in the open island. Must adapt to the width it gets (≈ 240 to 490 pt) and ≈ 84 pt of height (use
+    /// `ActivityCard`, which puts the actions beside the content or in its title row).
     public var expanded: @MainActor () -> AnyView
     /// Alert card content (≈ 410 × 70 pt). Nil falls back to a generic card built from `title` + actions.
     public var alert: (@MainActor () -> AnyView)?
@@ -186,13 +187,14 @@ public struct ActivityLauncher: Identifiable {
     /// Tapping starts this right away (stopwatch, Pomodoro). Nil: tapping reveals `options`.
     public var primary: IsletCommand?
     public var options: [LauncherOption]
-    /// Text put in the command field when the tile is chosen (e.g. "at " for alarms).
-    public var prefill: String?
+    /// Tapping runs this when there is no command to start (opens an app's page, connects the calendar).
+    public var open: (@MainActor () -> Void)?
     /// Optional status under the tile ("Next alarm 7:30").
     public var status: (@MainActor () -> String?)?
 
     public init(id: String, title: String, symbol: String, tint: Color, order: Int, primary: IsletCommand? = nil,
-                options: [LauncherOption] = [], prefill: String? = nil, status: (@MainActor () -> String?)? = nil) {
+                options: [LauncherOption] = [], open: (@MainActor () -> Void)? = nil,
+                status: (@MainActor () -> String?)? = nil) {
         self.id = id
         self.title = title
         self.symbol = symbol
@@ -200,7 +202,7 @@ public struct ActivityLauncher: Identifiable {
         self.order = order
         self.primary = primary
         self.options = options
-        self.prefill = prefill
+        self.open = open
         self.status = status
     }
 }

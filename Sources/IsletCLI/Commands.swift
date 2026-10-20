@@ -8,7 +8,7 @@ enum Invocation {
     case version
 }
 
-/// Turns arguments into an `IsletCommand` (subcommands, else the command bar's natural grammar).
+/// Turns arguments into an `IsletCommand` (subcommands, else the natural grammar of `CommandParser`).
 enum Commands {
     static func parse(_ args: inout Arguments) throws -> Invocation {
         guard let first = args.popPositional() else {
@@ -245,7 +245,7 @@ enum Commands {
         }
     }
 
-    /// Anything else: the command bar's grammar ("tea 4m", "pomo", "at 7:30", "awake 2h").
+    /// Anything else: `CommandParser`'s natural grammar ("tea 4m", "pomo", "at 7:30", "awake 2h").
     private static func naturalLanguage(_ first: String, _ args: inout Arguments) throws -> IsletCommand {
         let text = ([first] + args.positionals).joined(separator: " ")
         try args.allow(for: "islet \"…\"")

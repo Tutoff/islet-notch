@@ -9,24 +9,23 @@ struct ShelfItemTile: View {
     let store: ShelfStore
     @State private var hovering = false
 
-    static let width: CGFloat = 76
-    static let height: CGFloat = 92
-    private static let thumbnailSize: CGFloat = 50
+    /// Wide enough for ordinary names on one line ("Invoice-0193.pdf", "Budget 2026.xlsx"); the row scrolls.
+    static let width: CGFloat = 88
+    static let height: CGFloat = 56
+    private static let thumbnailSize: CGFloat = 38
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 3) {
             ShelfThumbnailView(url: item.url, size: Self.thumbnailSize)
+            // One line, middle-truncated ("Quarterly…2026.pdf" keeps the extension); the full path is the tooltip.
             Text(item.name)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(IsletTheme.primaryText.opacity(0.92))
-                // Like Finder: wrap names at spaces over two lines; a single long word is middle-truncated on
-                // one line instead of being broken mid-word ("Calculator.ap / p").
-                .lineLimit(item.name.contains(" ") ? 2 : 1)
+                .lineLimit(1)
                 .truncationMode(.middle)
-                .multilineTextAlignment(.center)
-                .frame(width: Self.width - 6, height: 26, alignment: .top)
+                .frame(width: Self.width - 4)
         }
-        .padding(.top, 6)
+        .padding(.top, 2)
         .frame(width: Self.width, height: Self.height, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: IsletTheme.smallRadius + 2, style: .continuous)
@@ -36,7 +35,7 @@ struct ShelfItemTile: View {
         .overlay(alignment: .topTrailing) {
             if hovering {
                 ShelfRemoveButton { store.remove(item) }
-                    .padding(5)
+                    .padding(3)
                     .transition(.opacity)
             }
         }

@@ -53,8 +53,7 @@ final class ShelfBadgeActivity: LiveActivity {
                         .font(.system(size: 10, weight: .semibold))
                     ShelfCount()
                 }
-                .foregroundStyle(IsletTheme.secondaryText)
-                .frame(maxWidth: .infinity, maxHeight: .infinity))
+                .foregroundStyle(IsletTheme.secondaryText))
             },
             expanded: { [weak self] in AnyView(ShelfSummaryView { self?.openShelf?() }) }
         )

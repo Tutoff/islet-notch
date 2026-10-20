@@ -417,20 +417,20 @@ private struct PomodoroCard: View {
     let model: PomodoroActivity
 
     var body: some View {
-        let settings = ClockSettings.shared
         ActivityCard(title: model.state?.awaiting == true ? "Pomodoro" : model.phase.title, symbol: model.symbol,
                      tint: model.tint, actions: model.actions) {
             if let state = model.state {
-                VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .center, spacing: 12) {
                     Group {
                         if state.awaiting {
                             Text(verbatim: state.wasAway ? "You were away" : "Up next: \(state.phase.title)")
-                                .font(.system(size: 20, weight: .semibold))
+                                .font(.system(size: 17, weight: .semibold))
+                                .minimumScaleFactor(0.8)
                         } else if state.isRunning, let end = state.endDate {
-                            LiveCountdown(end: end).font(.system(size: 28, weight: .semibold))
+                            LiveCountdown(end: end).font(.system(size: 26, weight: .semibold))
                         } else {
                             Text(verbatim: ClockText.clock(state.remaining(at: Date())))
-                                .font(.system(size: 28, weight: .semibold))
+                                .font(.system(size: 26, weight: .semibold))
                                 .foregroundStyle(IsletTheme.secondaryText)
                         }
                     }
@@ -438,16 +438,32 @@ private struct PomodoroCard: View {
                     .foregroundStyle(IsletTheme.primaryText)
                     .lineLimit(1)
 
-                    HStack(spacing: 8) {
-                        SessionDots(done: state.completedInCycle, total: settings.sessionsBeforeLongBreak, tint: IsletTheme.tomato)
-                        Text(verbatim: "\(settings.focusSessionsToday) today")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(IsletTheme.secondaryText)
+                    // Session dots and today's count beside the time, as much as the width allows.
+                    ViewThatFits(in: .horizontal) {
+                        sessions(state, today: true)
+                        sessions(state, today: false)
+                        Color.clear.frame(width: 0, height: 0)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+}
+
+extension PomodoroCard {
+    private func sessions(_ state: PomodoroState, today: Bool) -> some View {
+        let settings = ClockSettings.shared
+        return HStack(spacing: 8) {
+            SessionDots(done: state.completedInCycle, total: settings.sessionsBeforeLongBreak, tint: IsletTheme.tomato)
+            if today {
+                Text(verbatim: "\(settings.focusSessionsToday) today")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(IsletTheme.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .fixedSize()
     }
 }
 

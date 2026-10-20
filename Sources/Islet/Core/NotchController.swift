@@ -4,7 +4,7 @@ import IsletUI
 import ActivityCore
 import BadgesFeature
 import BatteryFeature
-import CalendarFeature
+import ClockFeature
 import DevicesFeature
 import NowPlayingFeature
 import ShelfFeature
@@ -16,14 +16,12 @@ struct IslandActions {
     var openLiveSettings: () -> Void
     var quit: () -> Void
     var didDrop: (ShelfDropDestination) -> Void
-    /// A launcher tile was chosen: starts it, reveals its options or pre-fills the command field.
+    /// A launcher tile was chosen: starts it, reveals its options or opens what it stands for.
     var chooseLauncher: (ActivityLauncher) -> Void
     /// A launcher option (timer preset, Keep Awake duration).
     var runFromLauncher: (IsletCommand) -> Void
-    /// Return in the command field.
-    var submit: (String) -> Void
-    /// The command field wants the keyboard: makes the panel key.
-    var focusField: () -> Void
+    /// The options' back button: the tiles again.
+    var closeLauncherOptions: () -> Void
     /// "+" in the header.
     var toggleLauncher: () -> Void
     /// Opens the full island on an activity (alert card background).
@@ -31,11 +29,11 @@ struct IslandActions {
 
     /// Does nothing (offscreen renders).
     static let inert = IslandActions(openSettings: {}, openLiveSettings: {}, quit: {}, didDrop: { _ in }, chooseLauncher: { _ in },
-                                     runFromLauncher: { _ in }, submit: { _ in }, focusField: {}, toggleLauncher: {},
+                                     runFromLauncher: { _ in }, closeLauncherOptions: {}, toggleLauncher: {},
                                      openActivity: { _ in })
 }
 
-/// Owns the panel and drives the island's state machine: hover, file drags, alerts, keyboard, quick menu.
+/// Owns the panel and drives the island's state machine: hover, file drags, alerts, hotkey, quick menu.
 ///
 /// Sizing strategy: the panel always matches the visible island (so it never blocks clicks on the
 /// menu bar around it). When the island grows, the panel grows on the next run loop turn (before the spring's second
@@ -86,7 +84,6 @@ final class NotchController {
         container.onDragCrossing = { [weak self] inside in self?.dragCrossedIsland(inside: inside) }
         container.contextMenuProvider = { [weak self] in self?.makeContextMenu() }
         panel.contentView = container
-        panel.keyHandler = { [weak self] event in self?.handleKey(event) ?? false }
         panel.setFrame(geometry.panelFrame(for: model.size), display: false)
 
         dragMonitor.onActiveChange = { [weak self] in self?.fileDragChanged($0) }
@@ -108,12 +105,6 @@ final class NotchController {
                 self.resyncHover()
                 self.presentAlertIfPossible()
             }
-        }
-        center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: panel, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.model.isKey = true }
-        }
-        center.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.panelResignedKey() }
         }
 
         // The adapters may have started an activity synchronously (a restored shelf, a track already known): the panel
@@ -143,18 +134,18 @@ final class NotchController {
             didDrop: { [weak self] destination in self?.didDrop(destination) },
             chooseLauncher: { [weak self] launcher in self?.chooseLauncher(launcher) },
             runFromLauncher: { [weak self] command in self?.runFromLauncher(command) },
-            submit: { [weak self] text in self?.submit(text) },
-            focusField: { [weak self] in self?.focusField() },
+            closeLauncherOptions: { [weak self] in self?.closeLauncherOptions() },
             toggleLauncher: { [weak self] in self?.toggleLauncher() },
             openActivity: { [weak self] id in self?.openActivity(id) }
         )
     }
 
-    /// Now Playing, the shelf badge and battery events on the engine.
+    /// Now Playing, the shelf badge and battery events on the engine; the Alarm tile's way into Settings.
     private func installAdapters() {
         NowPlayingActivity.shared.notchHeight = geometry.notchSize.height
         NowPlayingActivity.shared.install()
         ShelfBadgeActivity.shared.openShelf = { [weak self] in self?.open(tab: .shelf) }
+        ClockFeature.openAlarmSettings = { [weak self] in self?.showSettings(.live) }
         ShelfBadgeActivity.shared.install()
         BatteryMonitor.shared.onEvent = { event in
             // Settings › Battery. The monitor keeps tracking the state for the indicator either way.
@@ -261,8 +252,9 @@ final class NotchController {
     func close() {
         openTask?.cancel()
         closeTask?.cancel()
-        relinquishKey()
-        model.resetOpenState()
+        // After the phase change: `withAnimation` applies earlier model changes first, so the Live tab would see the
+        // launcher flag drop while still open and slide its pages, cutting the shrink animation short.
+        defer { model.resetOpenState() }
         guard model.phase == .open || model.phase == .peek else { return }
         if model.isFileDragActive {
             if model.phase == .open { withAnimation(Motion.close) { model.phase = .peek } }
@@ -272,25 +264,6 @@ final class NotchController {
         } else {
             withAnimation(Motion.close) { model.phase = .closed }
         }
-    }
-
-    /// Hands the keyboard back to the frontmost app (the panel is key only for the command field).
-    private func relinquishKey() {
-        guard panel.isKeyWindow else { return }
-        panel.makeFirstResponder(nil)
-        NSApp.deactivate()
-        if panel.isKeyWindow {
-            // Not active after all: ordering the panel out drops key status, it comes straight back.
-            panel.orderOut(nil)
-            panel.orderFrontRegardless()
-        }
-    }
-
-    private func panelResignedKey() {
-        model.isKey = false
-        model.isEditing = false
-        // Return, Esc or a click elsewhere: the command session is over.
-        if model.phase == .open { close() }
     }
 
     // MARK: - Hover
@@ -351,9 +324,9 @@ final class NotchController {
             return
         }
         // Dragging an item out of the shelf: `dragOutMoved` folds the island once the item has left it.
-        // Hold it for an open menu (header menu, context menus), the drop zones of a file drag and the command field
-        // (Return, Esc or a click elsewhere end it). Each one re-checks when it ends: nothing to poll for meanwhile.
-        if ShelfStore.shared.isDraggingOut || model.isFileDragActive || isMenuTracking || model.isEditing { return }
+        // Hold it for an open menu (header menu, context menus) and the drop zones of a file drag. Each one re-checks
+        // when it ends: nothing to poll for meanwhile.
+        if ShelfStore.shared.isDraggingOut || model.isFileDragActive || isMenuTracking { return }
         if pointerIsInside(panel.frame) {
             // Opened by a drag: the tracking area saw no enter. Re-arm it on the pointer; its exit closes the island.
             if !isHovering { resyncHover() }
@@ -440,7 +413,7 @@ final class NotchController {
         }
     }
 
-    /// Shows the current alert unless the user is busy with the island (typing, dragging, in a menu): then it
+    /// Shows the current alert unless the user is busy with the island (dragging, in a menu): then it
     /// waits for the island to close. During a shelf drag-out it waits even with the island folded away, so the
     /// card doesn't cover the drop targets around the notch (`trackDragOut` presents it once the drag ends).
     private func presentAlertIfPossible() {
@@ -449,8 +422,7 @@ final class NotchController {
         case .closed:
             presentAlert()
         case .open:
-            let busy = model.isEditing || model.isFileDragActive
-            if !busy { presentAlert() }
+            if !model.isFileDragActive { presentAlert() }
         case .peek, .alert:
             break
         }
@@ -459,9 +431,8 @@ final class NotchController {
     private func presentAlert() {
         openTask?.cancel()
         closeTask?.cancel()
-        relinquishKey()
-        model.resetOpenState()
         withAnimation(Motion.open) { model.phase = .alert }
+        model.resetOpenState()      // after the phase change, as in close()
         if Preferences.shared.haptics {
             NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
         }
@@ -501,98 +472,59 @@ final class NotchController {
         }
     }
 
-    // MARK: - Launcher & command field
+    // MARK: - Launcher
 
     private func chooseLauncher(_ launcher: ActivityLauncher) {
-        model.commandError = nil
+        model.launcherError = nil
         if let primary = launcher.primary {
             runFromLauncher(primary)
         } else if !launcher.options.isEmpty {
-            model.expandedLauncherID = model.expandedLauncherID == launcher.id ? nil : launcher.id
-        } else if let prefill = launcher.prefill {
-            model.expandedLauncherID = nil
-            model.commandText = prefill
-            focusField()
-        } else if launcher.id == CalendarFeature.launcherID {
-            CalendarFeature.openFromLauncher()
+            model.expandedLauncherID = launcher.id
+        } else if let open = launcher.open {
+            open()
         }
     }
 
     private func runFromLauncher(_ command: IsletCommand) {
         let result = CommandRouter.shared.execute(command)
         if result.ok {
+            // Off the Launch page: the pager shows what just started.
             model.expandedLauncherID = nil
             model.showsLauncher = false
-            model.commandError = nil
+            model.launcherError = nil
         } else {
-            model.commandError = result.error ?? "Couldn't start it"
+            model.launcherError = result.error ?? "Couldn't start it"
         }
     }
 
-    /// Return: runs the command and closes the island; an empty field just closes it.
-    private func submit(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            close()
-            return
-        }
-        guard let command = CommandParser.parse(trimmed) else {
-            model.commandError = "Not understood"
-            return
-        }
-        let result = CommandRouter.shared.execute(command)
-        if result.ok {
-            close()
-        } else {
-            model.commandError = result.error ?? "Couldn't do that"
-        }
-    }
-
-    /// Makes the panel key (the frontmost app stays frontmost) and focuses the command field, caret at the end.
-    private func focusField() {
-        if !panel.isKeyWindow { panel.makeKey() }
-        model.fieldFocusRequest += 1
-        placeCaretAtEnd(attempts: 3)
-    }
-
-    /// A field taking focus selects its text: put the caret after a pre-filled "at " instead.
-    private func placeCaretAtEnd(attempts: Int) {
-        guard attempts > 0 else { return }
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            guard let editor = self.panel.firstResponder as? NSTextView else {
-                self.placeCaretAtEnd(attempts: attempts - 1)
-                return
-            }
-            editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
-        }
+    private func closeLauncherOptions() {
+        model.expandedLauncherID = nil
+        model.launcherError = nil
     }
 
     private func toggleLauncher() {
         model.expandedLauncherID = nil
-        model.commandError = nil
+        model.launcherError = nil
         if model.tab != .live || model.isFileDragActive {
             model.tab = .live
             model.showsLauncher = true
         } else {
             model.showsLauncher.toggle()
         }
-        if !model.showsLauncher {
-            model.commandText = ""
-            if panel.isKeyWindow { panel.makeFirstResponder(nil) }
-        }
     }
 
-    /// ⌃⌥Space: opens the launcher with the keyboard in the command field; a second press closes the island.
+    /// ⌃⌥Space: opens the island on the Launch page; a second press closes it. The pointer is usually elsewhere:
+    /// unless it comes over the island within a few seconds (then leaving closes it, as after a hover), it closes.
     func toggleFromHotKey() {
-        if model.phase == .open, panel.isKeyWindow {
+        if model.phase == .open, model.tab == .live, model.showsLauncher, !model.isFileDragActive {
             close()
             return
         }
-        model.resetOpenState()
-        model.showsLauncher = !LiveItems.current.isEmpty
+        if model.phase != .open { model.resetOpenState() }
+        model.expandedLauncherID = nil
+        model.showsLauncher = true
         open(tab: .live)
-        focusField()
+        scheduleClose(after: .seconds(5))
     }
 
     /// `.open(tab:)` from a URL or the CLI: opens the island, which closes again a few seconds later unless the
@@ -607,65 +539,11 @@ final class NotchController {
         return .success(message: "Opened")
     }
 
-    // MARK: - Keyboard (while the panel is key)
-
-    /// Esc closes (or hides the "+" launcher first). With the activities on screen: ←/→ (↑/↓) select one, Space
-    /// runs its main action (pause/resume), ⌫ its destructive one (cancel, end). Typing goes to the command field.
-    private func handleKey(_ event: NSEvent) -> Bool {
-        guard model.phase == .open else { return false }
-        let modifiers = event.modifierFlags.intersection([.command, .control, .option])
-        guard modifiers.isEmpty else { return false }
-        let items = LiveItems.current
-
-        if event.keyCode == 53 { // Esc
-            if model.showsLauncher, !items.isEmpty, model.tab == .live {
-                model.showsLauncher = false
-                model.commandText = ""
-                panel.makeFirstResponder(nil)
-            } else {
-                close()
-            }
-            return true
-        }
-
-        let cardsShown = model.tab == .live && !model.isFileDragActive && !items.isEmpty && !model.showsLauncher
-        guard cardsShown, !model.isEditing else { return false }
-        let focused = LiveItems.focused(items, focusedID: model.focusedActivityID)
-        switch event.keyCode {
-        case 123, 126: // ← ↑
-            select(offset: -1, in: items, from: focused)
-        case 124, 125: // → ↓
-            select(offset: 1, in: items, from: focused)
-        case 49: // Space
-            focused?.actions.first { $0.role == .primary && $0.isEnabled }?.perform()
-        case 51, 117: // ⌫ ⌦
-            focused?.actions.first { $0.role == .destructive && $0.isEnabled }?.perform()
-        default:
-            return false
-        }
-        return true
-    }
-
-    private func select(offset: Int, in items: [any LiveActivity], from focused: (any LiveActivity)?) {
-        guard !items.isEmpty else { return }
-        let index = items.firstIndex { $0.id == focused?.id } ?? 0
-        let next = min(max(0, index + offset), items.count - 1)
-        model.focusedActivityID = items[next].id
-    }
-
     // MARK: - Quick menu
 
     private func makeContextMenu() -> NSMenu {
         let handlers = IslandMenu.Handlers(
             run: { command in CommandRouter.shared.execute(command) },
-            openLauncher: { [weak self] text in
-                guard let self else { return }
-                self.model.resetOpenState()
-                self.model.showsLauncher = !LiveItems.current.isEmpty
-                self.open(tab: .live)
-                self.model.commandText = text
-                self.focusField()
-            },
             openSettings: { [weak self] in self?.showSettings() }
         )
         return IslandMenu.make(items: LiveItems.all, handlers: handlers)
@@ -819,8 +697,8 @@ final class NotchController {
     #if DEBUG
     /// Forces a state from launch arguments, for screenshots and checks:
     /// `-debugPhase open|peek|alert`, `-debugTab shelf|live|launcher`, `-debugTile timer` (reveals its options),
-    /// `-debugDrag 1`, `-debugTransient battery|shelf`, `-debugShelf a:b`, `-debugCommand "25m,sw"` (command bar
-    /// text, comma-separated), `-debugMenu 1` (logs the quick menu), `-debugHotKey 1` with `-debugType "tea 4m⏎"`,
+    /// `-debugDrag 1`, `-debugTransient battery|shelf`, `-debugShelf a:b`, `-debugCommand "25m,sw"` (commands in the
+    /// CLI's natural grammar, comma-separated), `-debugMenu 1` (logs the quick menu), `-debugHotKey 1`,
     /// `-debugRender out.png` (offscreen) or `-debugSnapshot out.png` (live panel), `-debugRenderDelay 3`.
     /// `-debugPhase alert` raises a ringing alert on the top activity when none is up. `-debugURL` and
     /// `-debugSettings` are handled by the app delegate.
@@ -900,21 +778,14 @@ final class NotchController {
             }
         default: break
         }
-        // `-debugHotKey 1`: presses ⌃⌥Space a second after launch, then logs the keyboard state. With
-        // `-debugType "tea 4m⏎"` it then types into the island (⏎ Return, ⎋ Esc, ← → Space ⌫ as themselves).
+        // `-debugHotKey 1`: presses ⌃⌥Space a second after launch, then logs the island's state (and the keyboard's:
+        // the panel must never be key).
         if defaults.bool(forKey: "debugHotKey") {
-            let typing = defaults.string(forKey: "debugType") ?? ""
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(1))
                 self?.toggleFromHotKey()
                 try? await Task.sleep(for: .milliseconds(600))
-                self?.logKeyboardState("hotkey")
-                for character in typing {
-                    guard let self else { return }
-                    self.postDebugKey(character)
-                    try? await Task.sleep(for: .milliseconds(120))
-                    if "⏎⎋←→ ⌫".contains(character) { self.logKeyboardState("after \(character)") }
-                }
+                self?.logState("hotkey")
             }
         }
         // `-debugOpenAfter 2`: opens the island that many seconds after launch through the path
@@ -970,15 +841,13 @@ final class NotchController {
         }
     }
 
-    /// The open paths `-debugOpenAfter` exercises. The hotkey one leaves the keyboard alone (no `focusField`).
+    /// The open paths `-debugOpenAfter` exercises.
     private func debugOpen(via: String) async {
         let notchPoint = NSPoint(x: geometry.screenFrame.midX, y: geometry.screenFrame.maxY - 2)
         NSLog("Islet debug: open via \(via) at \(ProcessInfo.processInfo.systemUptime)")
         switch via {
         case "hotkey":
-            model.resetOpenState()
-            model.showsLauncher = !LiveItems.current.isEmpty
-            open(tab: .live)
+            toggleFromHotKey()
         case "command":
             _ = openFromCommand(tab: "live")
         case "wings":
@@ -1017,28 +886,10 @@ final class NotchController {
         }
     }
 
-    private func logKeyboardState(_ label: String) {
-        let responder = panel.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"
-        NSLog("Islet debug: \(label) → phase=\(model.phase) key=\(panel.isKeyWindow) active=\(NSApp.isActive) "
-              + "editing=\(model.isEditing) launcher=\(model.showsLauncher) text=\"\(model.commandText)\" "
-              + "error=\(model.commandError ?? "-") focused=\(model.focusedActivityID ?? "-") firstResponder=\(responder) "
-              + "frontmost=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?") "
-              + "running=\(center.activities.map(\.id).joined(separator: ","))")
-    }
-
-    private func postDebugKey(_ character: Character) {
-        let special: [Character: (UInt16, String)] = [
-            "⏎": (36, "\r"), "⎋": (53, "\u{1b}"), "←": (123, "\u{F702}"), "→": (124, "\u{F703}"), "⌫": (51, "\u{7f}"),
-        ]
-        let (code, text) = special[character] ?? (character == " " ? 49 : 0, String(character))
-        for type in [NSEvent.EventType.keyDown, .keyUp] {
-            guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [],
-                                               timestamp: ProcessInfo.processInfo.systemUptime,
-                                               windowNumber: panel.windowNumber, context: nil, characters: text,
-                                               charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)
-            else { continue }
-            NSApp.postEvent(event, atStart: false)
-        }
+    private func logState(_ label: String) {
+        NSLog("Islet debug: \(label) → phase=\(model.phase) tab=\(model.tab) launcher=\(model.showsLauncher) "
+              + "key=\(panel.isKeyWindow) frontmost=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?") "
+              + "focused=\(model.focusedActivityID ?? "-") running=\(center.activities.map(\.id).joined(separator: ","))")
     }
     #endif
 }

@@ -263,7 +263,6 @@ private struct CallMinimal: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: activity.accessibilityText))
     }

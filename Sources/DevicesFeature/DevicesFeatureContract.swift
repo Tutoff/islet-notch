@@ -17,7 +17,7 @@ public enum DevicesFeature {
         DevicesController.shared.prepareForTermination()
     }
 
-    /// Call when the user brings the island up (peek, open, hover focus, command bar). Lets the microphone
+    /// Call when the user brings the island up (peek, open, hover focus, hotkey). Lets the microphone
     /// indicator catch recording CoreAudio doesn't announce (an app starting to record on a USB headset it
     /// already plays to). Cheap, and a no-op unless a device with inputs and outputs is running.
     @MainActor public static func islandDidOpen() {

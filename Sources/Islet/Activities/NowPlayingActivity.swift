@@ -104,7 +104,6 @@ private struct NowPlayingMinimal: View {
             NowPlayingCompactTrailing()
                 .frame(width: 14, height: 16)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

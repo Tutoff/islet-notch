@@ -44,11 +44,10 @@ struct MeetingMinimalView: View {
             MeetingGlyph(activity: activity, size: 10)
             MeetingValue(activity: activity, size: 11)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-/// Card in the open island: title, time range, location, the big countdown, Join / Open / Dismiss.
+/// Card in the open island: title, then time range · location, the big countdown on the right; Join / Open / Dismiss.
 struct MeetingExpandedView: View {
     let activity: MeetingActivity
 
@@ -57,30 +56,19 @@ struct MeetingExpandedView: View {
                      symbol: activity.symbol, tint: activity.tint, actions: activity.actions) {
             if let event = activity.snapshot?.event {
                 HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(verbatim: event.title)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(IsletTheme.primaryText)
-                            .lineLimit(1)
-                        Text(verbatim: activity.timeRange)
-                            .font(.system(size: 12))
+                        Text(verbatim: [activity.timeRange, event.location].compactMap { $0 }.joined(separator: " · "))
+                            .font(.system(size: 11.5))
                             .monospacedDigit()
                             .foregroundStyle(IsletTheme.secondaryText)
-                            .lineLimit(1)
-                        if let location = event.location {
-                            Label {
-                                Text(verbatim: location)
-                            } icon: {
-                                Image(systemName: "mappin.and.ellipse")
-                            }
-                            .font(.system(size: 11))
-                            .foregroundStyle(IsletTheme.tertiaryText)
-                            .lineLimit(1)
-                        }
                     }
+                    .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    MeetingValue(activity: activity, size: 28)
+                    MeetingValue(activity: activity, size: 24)
                 }
             }
         }
