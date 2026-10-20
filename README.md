@@ -28,11 +28,12 @@ Objectif n°1 : être invisible pour le système. Mesuré sur un MacBook Air M5 
 Prérequis : macOS 14 (Sonoma) ou plus récent. Pensé pour les Mac à encoche ; sur les autres, Islet dessine une
 pseudo-encoche au milieu de la barre des menus.
 
-**Version prête à l'emploi (Mac Apple Silicon)** : colle ces lignes dans le Terminal.
+**Version prête à l'emploi (Mac Apple Silicon)** : colle ces lignes dans le Terminal. Les mêmes lignes
+mettent à jour une installation existante (quitter Islet avant : menu `…` → Quit).
 
 ```bash
 curl -fL -o /tmp/Islet.zip https://github.com/Tutoff/islet-notch/releases/latest/download/Islet.zip
-ditto -x -k /tmp/Islet.zip /Applications
+rm -rf /Applications/Islet.app && ditto -x -k /tmp/Islet.zip /Applications
 xattr -dr com.apple.quarantine /Applications/Islet.app
 open /Applications/Islet.app
 ```
