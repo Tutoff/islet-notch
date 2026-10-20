@@ -1,114 +1,384 @@
+import AppKit
 import SwiftUI
 import IsletUI
 import ActivityCore
-import ShelfFeature
+import CalendarFeature
+import NowPlayingFeature
 
-/// The Live tab, laid out by how many activities run:
-/// 0 (unread badges and a paused track don't count) → launcher · 1 → its card · 2 → two cards · 3+ → list and detail.
-/// The summary column stays on the right while the shelf has items (launcher, single card) or an app shows an unread
-/// badge (launcher). "+" shows the launcher over the activities.
-struct LiveTabView: View {
-    let model: IslandModel
-    let actions: IslandActions
+/// The Live tab's pages, top to bottom.
+enum LivePage: String, CaseIterable, Identifiable {
+    /// Running activities (timers, calls, downloads, unread badges...): only while there are some.
+    case now
+    /// What's playing (paused included), or "Nothing playing".
+    case music
+    /// Today's date and the next events.
+    case calendar
+    /// Launcher tiles and the command field.
+    case launch
 
-    private static let shelfColumnWidth: CGFloat = 170
-    private static let spacing: CGFloat = 12
+    var id: Self { self }
 
-    var body: some View {
-        let items = LiveItems.current
-        let shelfColumn = !ShelfStore.shared.items.isEmpty
-
-        Group {
-            if items.isEmpty || model.showsLauncher {
-                let unread = LiveItems.unread
-                HStack(spacing: Self.spacing) {
-                    LauncherView(model: model, actions: actions)
-                    if let unread {
-                        launcherSummary(unread: unread, withShelf: shelfColumn)
-                            .frame(width: Self.shelfColumnWidth)
-                    } else if shelfColumn {
-                        shelfSummary
-                    }
-                }
-            } else if items.count == 1 {
-                HStack(spacing: Self.spacing) {
-                    ActivityCardView(activity: items[0], actions: actions, highlighted: false)
-                    if shelfColumn { shelfSummary }
-                }
-            } else if items.count == 2 {
-                let focused = LiveItems.focused(items, focusedID: model.focusedActivityID)
-                HStack(spacing: Self.spacing) {
-                    ForEach(items, id: \.id) { activity in
-                        ActivityCardView(activity: activity, actions: actions,
-                                         highlighted: model.isKey && activity.id == focused?.id)
-                            .onHover { inside in
-                                if inside { model.focusedActivityID = activity.id }
-                            }
-                    }
-                }
-            } else {
-                ListDetailView(items: items, model: model, actions: actions)
-            }
-        }
-        .transition(.opacity)
-        .animation(IsletTheme.quick, value: model.showsLauncher)
-    }
-
-    private var shelfSummary: some View {
-        ShelfSummaryView { model.tab = .shelf }
-            .frame(width: Self.shelfColumnWidth)
-    }
-
-    /// Unread badges beside the launcher: their card, or one row under the shelf summary when both are there.
-    @ViewBuilder
-    private func launcherSummary(unread: any LiveActivity, withShelf: Bool) -> some View {
-        if withShelf {
-            VStack(spacing: 6) {
-                ShelfSummaryView { model.tab = .shelf }
-                UnreadRow(activity: unread)
-            }
-        } else {
-            ActivityCardView(activity: unread, actions: actions, highlighted: false)
+    var title: String {
+        switch self {
+        case .now: "Now"
+        case .music: "Music"
+        case .calendar: "Calendar"
+        case .launch: "Launch"
         }
     }
 }
 
-/// Unread badges in one 30-pt row (minimal view + title) under the shelf summary. A click opens the app whose badge
-/// went up last; the right-click menu opens the others.
-private struct UnreadRow: View {
-    let activity: any LiveActivity
-    @State private var hovering = false
+/// The Live tab: a vertical pager, one page at a time — trackpad (native paging), mouse wheel (one notch, one page),
+/// ↑/↓ or Page Up/Down while the island has the keyboard, or the dots on the right.
+///
+/// Opens on Now when something runs, else on Music (also when the pointer came in over the media wing). "+", ⌃⌥Space
+/// and "Alarm…" (`model.showsLauncher`, a field focus request) jump to Launch; `model.showsLauncher` follows the page so "+" and Esc leave it. Nothing is
+/// remembered across openings: the page is view state, gone when the island closes.
+struct LiveTabView: View {
+    let model: IslandModel
+    let actions: IslandActions
+    /// Margins of each page inside the pager, which runs from the header to the island's bottom edge so pages slide
+    /// out under it.
+    let contentInsets: EdgeInsets
+
+    @State private var page: LivePage?
+    @State private var input = PagerInput()
+
+    private static let dotsWidth: CGFloat = 5
+
+    init(model: IslandModel, actions: IslandActions, contentInsets: EdgeInsets) {
+        self.model = model
+        self.actions = actions
+        self.contentInsets = contentInsets
+        _page = State(initialValue: Self.initialPage(model))
+    }
 
     var body: some View {
-        let primary = activity.actions.first { $0.role == .primary && $0.isEnabled }
-        IslandCard(highlighted: hovering && primary != nil) {
-            HStack(spacing: 6) {
-                activity.presentation.minimal()
-                    .frame(width: 52, height: 22)
-                Text(verbatim: activity.title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(IsletTheme.secondaryText)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        let items = LiveItems.current
+        let pages = Self.pages(hasNow: !items.isEmpty)
+        let current = Self.resolve(page, in: pages)
+
+        HStack(spacing: 7) {
+            GeometryReader { proxy in
+                ScrollViewReader { reader in
+                    ScrollView(.vertical) {
+                        // Lazy: only the pages near the one shown are built. That alone doesn't stop an off-screen
+                        // page's clocks (the stack may keep a neighbour "appeared", e.g. Now above Music after opening
+                        // on Music): `ticksActive` does, and `isActive` for the Music progress and Calendar.
+                        LazyVStack(spacing: 0) {
+                            ForEach(pages) { item in
+                                pageContent(item, items: items, isCurrent: item == current)
+                                    .environment(\.ticksActive, item == current)
+                                    .padding(.top, contentInsets.top)
+                                    .padding(.bottom, contentInsets.bottom)
+                                    .frame(width: proxy.size.width, height: proxy.size.height)
+                                    .id(item)
+                            }
+                        }
+                        .scrollTargetLayout()
+                    }
+                    .scrollIndicators(.never)
+                    .scrollTargetBehavior(.paging)
+                    .scrollPosition(id: $page)
+                    .onAppear { reader.scrollTo(current, anchor: .top) }
+                    // The open transition scales the platform scroll view, which drifts its offset a few points off
+                    // the page boundary (any page but the first): put it back.
+                    .modifier(PageSnapping(pageHeight: proxy.size.height) {
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            reader.scrollTo(Self.resolve(page, in: Self.currentPages), anchor: .top)
+                        }
+                    })
+                    // A page came or went (the first activity started, the last one ended): stay on the page shown,
+                    // or fall back to the default one, without sliding through the others.
+                    .onChange(of: pages) { _, newPages in
+                        let target = Self.resolve(page, in: newPages)
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            page = target
+                            reader.scrollTo(target, anchor: .top)
+                        }
+                    }
+                }
             }
-            .padding(.horizontal, 4)
-            .frame(maxWidth: .infinity)
-            .frame(height: 30)
+
+            PageDots(pages: pages, current: current) { go($0) }
+                .frame(width: Self.dotsWidth)
+                .padding(.top, contentInsets.top)
+                .padding(.bottom, contentInsets.bottom)
         }
-        .opacity(ActivityCenter.shared.isHidden(id: activity.id) ? 0.6 : 1)
-        .contentShape(RoundedRectangle(cornerRadius: IsletTheme.cardRadius, style: .continuous))
-        .onTapGesture { primary?.perform() }
-        .onHover { hovering = $0 }
-        .animation(IsletTheme.quick, value: hovering)
-        .contextMenu {
-            ForEach(activity.actions) { action in
-                Button(action.title) { action.perform() }
-                    .disabled(!action.isEnabled)
+        .onAppear {
+            syncLauncher(with: current)
+            input.handler = { handle($0) }
+            input.start()
+        }
+        .onDisappear { input.stop() }
+        .onChange(of: LauncherSignal(shows: model.showsLauncher, focusRequest: model.fieldFocusRequest)) { old, new in
+            if new.focusRequest != old.focusRequest || (new.shows && !old.shows) {
+                go(.launch)
+            } else if old.shows, !new.shows, model.phase == .open,
+                      Self.resolve(page, in: Self.currentPages) == .launch {
+                // "+" or Esc leaving Launch. Not a close (it resets the flag too): sliding the pages inside the closing
+                // island would override its shrink animation and make it snap shut.
+                go(Self.defaultPage)
             }
         }
-        .help(primary?.title ?? activity.title)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(primary != nil ? .isButton : [])
+        .onChange(of: page) { _, newPage in
+            if let newPage { syncLauncher(with: newPage) }
+        }
+    }
+
+    @ViewBuilder
+    private func pageContent(_ item: LivePage, items: [any LiveActivity], isCurrent: Bool) -> some View {
+        switch item {
+        case .now:
+            NowPage(items: items, model: model, actions: actions)
+        case .music:
+            NowPlayingExpandedView(isActive: isCurrent)
+        case .calendar:
+            CalendarAgendaView(isActive: isCurrent)
+        case .launch:
+            LauncherView(model: model, actions: actions, isCurrent: isCurrent)
+        }
+    }
+
+    // MARK: Pages
+
+    private static func pages(hasNow: Bool) -> [LivePage] {
+        hasNow ? LivePage.allCases : [.music, .calendar, .launch]
+    }
+
+    private static var currentPages: [LivePage] {
+        pages(hasNow: !LiveItems.current.isEmpty)
+    }
+
+    /// Now when something other than unread badges runs, else Music.
+    private static var defaultPage: LivePage {
+        LiveItems.hasRunning ? .now : .music
+    }
+
+    /// `page` when it is one of `pages`, else the default page.
+    private static func resolve(_ page: LivePage?, in pages: [LivePage]) -> LivePage {
+        if let page, pages.contains(page) { return page }
+        let fallback = defaultPage
+        return pages.contains(fallback) ? fallback : pages[0]
+    }
+
+    /// Launch when it was asked for (the panel is key only for the command field), Music when the pointer came in
+    /// over the media wing, else the default page.
+    private static func initialPage(_ model: IslandModel) -> LivePage {
+        #if DEBUG
+        if let forced = DebugPage.take() { return forced }
+        #endif
+        if model.showsLauncher || model.isKey { return .launch }
+        if model.focusedActivityID == NowPlayingActivity.activityID { return .music }
+        return defaultPage
+    }
+
+    private func go(_ target: LivePage) {
+        guard target != page else { return }
+        withAnimation(Motion.reduce ? nil : .smooth(duration: 0.32)) { page = target }
+    }
+
+    /// Steps `offset` pages from the current one, stopping at the ends.
+    private func step(_ offset: Int) {
+        let pages = Self.currentPages
+        let current = Self.resolve(page, in: pages)
+        guard let index = pages.firstIndex(of: current), pages.indices.contains(index + offset) else { return }
+        go(pages[index + offset])
+    }
+
+    /// The Launch page is `model.showsLauncher`; leaving it folds the tile options away.
+    private func syncLauncher(with page: LivePage) {
+        let onLaunch = page == .launch
+        if model.showsLauncher != onLaunch { model.showsLauncher = onLaunch }
+        if !onLaunch, model.expandedLauncherID != nil { model.expandedLauncherID = nil }
+    }
+
+    // MARK: Mouse wheel and keyboard
+
+    /// Returns true when the event was used (it then goes no further).
+    private func handle(_ event: NSEvent) -> Bool {
+        guard event.window is NotchPanel, model.phase == .open, model.tab == .live, !model.isFileDragActive else {
+            return false
+        }
+        switch event.type {
+        case .scrollWheel:
+            // Trackpads and smooth-scrolling mice page natively; a classic wheel's notch turns exactly one page.
+            guard !event.hasPreciseScrollingDeltas, event.scrollingDeltaY != 0,
+                  abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX) else { return false }
+            if input.acceptWheelStep() { step(event.scrollingDeltaY > 0 ? -1 : 1) }
+            return true
+        case .keyDown:
+            let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+            guard model.isKey, !model.isEditing, modifiers.isEmpty else { return false }
+            switch event.keyCode {
+            case 126, 116: // ↑, Page Up
+                step(-1)
+                return true
+            case 125, 121: // ↓, Page Down
+                step(1)
+                return true
+            case 123, 124, 49, 51, 117: // ← → Space ⌫ ⌦: the controller applies them to the Now page's cards
+                let current = Self.resolve(page, in: Self.currentPages)
+                guard current != .now else { return false }
+                // Elsewhere they would act on cards nobody sees; on Music, Space plays and pauses.
+                if current == .music, event.keyCode == 49 { NowPlayingService.shared.playPause() }
+                return current != .launch
+            default:
+                return false
+            }
+        default:
+            return false
+        }
+    }
+}
+
+/// Keeps the pager on a page boundary. From macOS 15, whenever the scroll view rests between two pages (swipes,
+/// `.interacting` then `.decelerating`, and `go()`, `.animating`, are left alone): event-driven, nothing runs at
+/// rest. On macOS 14, once, right after the open transition (the only source of drift).
+private struct PageSnapping: ViewModifier {
+    let pageHeight: CGFloat
+    let snap: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15, *) {
+            content.modifier(RestingPageSnap(pageHeight: pageHeight, snap: snap))
+        } else {
+            content.task {
+                try? await Task.sleep(for: .seconds(Motion.contentInsertionEnd + 0.04))
+                snap()
+            }
+        }
+    }
+}
+
+@available(macOS 15, *)
+private struct RestingPageSnap: ViewModifier {
+    let pageHeight: CGFloat
+    let snap: () -> Void
+    @State private var phase: ScrollPhase = .idle
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollPhaseChange { _, newPhase in phase = newPhase }
+            .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { _, offset in
+                guard phase == .idle, pageHeight > 0 else { return }
+                let boundary = (offset / pageHeight).rounded() * pageHeight
+                if abs(offset - boundary) > 0.25 { snap() }
+            }
+    }
+}
+
+/// "+" / ⌃⌥Space / "Alarm…" as one value, so the page reacts once to a reset followed by a focus request.
+private struct LauncherSignal: Equatable {
+    var shows: Bool
+    var focusRequest: Int
+}
+
+/// Local event monitor (mouse wheel, keys) installed while the Live tab is on screen. Event-driven: nothing runs
+/// between events, and it only sees events sent to Islet's own windows.
+@MainActor
+private final class PagerInput {
+    var handler: ((NSEvent) -> Bool)?
+    private var monitor: Any?
+    private var lastWheelStep = Date.distantPast
+
+    func start() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .keyDown]) { [weak self] event in
+            let used = MainActor.assumeIsolated { self?.handler?(event) ?? false }
+            return used ? nil : event
+        }
+    }
+
+    func stop() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+        handler = nil
+    }
+
+    /// A spin of the wheel sends several notches: one page per 0.35 s.
+    func acceptWheelStep() -> Bool {
+        let now = Date()
+        guard now.timeIntervalSince(lastWheelStep) > 0.35 else { return false }
+        lastWheelStep = now
+        return true
+    }
+}
+
+#if DEBUG
+/// `-debugPage now|music|calendar|launch`: the first opening shows that page.
+@MainActor
+private enum DebugPage {
+    private static var used = false
+
+    static func take() -> LivePage? {
+        guard !used, let value = UserDefaults.standard.string(forKey: "debugPage") else { return nil }
+        used = true
+        return LivePage(rawValue: value)
+    }
+}
+#endif
+
+// MARK: - Page dots
+
+/// Slim vertical indicator: the current page is a longer, brighter capsule. Click a dot to go there.
+private struct PageDots: View {
+    let pages: [LivePage]
+    let current: LivePage
+    let select: (LivePage) -> Void
+
+    var body: some View {
+        VStack(spacing: 2) {
+            ForEach(pages) { page in
+                let selected = page == current
+                Button { select(page) } label: {
+                    Capsule()
+                        .fill(selected ? IsletTheme.primaryText : Color.white.opacity(0.28))
+                        .frame(width: 5, height: selected ? 14 : 5)
+                        .frame(height: selected ? 18 : 9)
+                        // Wider than the 5-pt column: easy to hit without taking room from the pages.
+                        .contentShape(Rectangle().inset(by: -5))
+                }
+                .buttonStyle(.plain)
+                .help(page.title)
+                .accessibilityLabel(Text(verbatim: page.title))
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .frame(maxHeight: .infinity)
+        .animation(IsletTheme.quick, value: current)
+    }
+}
+
+// MARK: - Now page
+
+/// Running activities, laid out by count: 1 → its card · 2 → two cards · 3+ → list and detail.
+private struct NowPage: View {
+    let items: [any LiveActivity]
+    let model: IslandModel
+    let actions: IslandActions
+
+    var body: some View {
+        if items.count == 1 {
+            ActivityCardView(activity: items[0], actions: actions, highlighted: false)
+        } else if items.count == 2 {
+            let focused = LiveItems.focused(items, focusedID: model.focusedActivityID)
+            HStack(spacing: 8) {
+                ForEach(items, id: \.id) { activity in
+                    ActivityCardView(activity: activity, actions: actions,
+                                     highlighted: model.isKey && activity.id == focused?.id)
+                        .onHover { inside in
+                            if inside { model.focusedActivityID = activity.id }
+                        }
+                }
+            }
+        } else if !items.isEmpty {
+            ListDetailView(items: items, model: model, actions: actions)
+        }
     }
 }
 
@@ -152,31 +422,32 @@ private struct ActivityCardView: View {
     }
 }
 
-/// 3+ activities: a scrolling list of 30-pt rows (minimal view + title) and the selected card.
-/// Hovering a row selects it after 80 ms; clicking also works; ↑/↓ when the island is key.
+/// 3+ activities: up to 4 rows (minimal view + title) and the selected card; more than 4 adds a "+N" menu (no nested
+/// scrolling inside the pager). The selected activity always has a row. Hovering a row selects it after 80 ms;
+/// clicking also works; ←/→ when the island is key.
 private struct ListDetailView: View {
     let items: [any LiveActivity]
     let model: IslandModel
     let actions: IslandActions
 
+    private static let maxRows = 4
+
     var body: some View {
         let selected = LiveItems.focused(items, focusedID: model.focusedActivityID)
+        let rows = visibleRows(selected: selected)
+        let hidden = items.filter { item in !rows.contains { $0.id == item.id } }
+
         HStack(spacing: 12) {
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 2) {
-                        ForEach(items, id: \.id) { activity in
-                            ActivityRow(activity: activity, selected: activity.id == selected?.id) {
-                                model.focusedActivityID = activity.id
-                            }
-                            .id(activity.id)
-                        }
+            VStack(spacing: 2) {
+                ForEach(rows, id: \.id) { activity in
+                    ActivityRow(activity: activity, selected: activity.id == selected?.id) {
+                        model.focusedActivityID = activity.id
                     }
                 }
-                .onChange(of: selected?.id) { _, id in
-                    guard let id else { return }
-                    withAnimation(IsletTheme.quick) { proxy.scrollTo(id) }
+                if !hidden.isEmpty {
+                    MoreMenu(items: hidden) { model.focusedActivityID = $0 }
                 }
+                Spacer(minLength: 0)
             }
             .frame(width: 170)
 
@@ -184,6 +455,43 @@ private struct ListDetailView: View {
                 ActivityCardView(activity: selected, actions: actions, highlighted: false)
             }
         }
+    }
+
+    /// The first rows, the last one giving way to the selection when it is further down.
+    private func visibleRows(selected: (any LiveActivity)?) -> [any LiveActivity] {
+        guard items.count > Self.maxRows else { return items }
+        var rows = Array(items.prefix(Self.maxRows))
+        if let selected, !rows.contains(where: { $0.id == selected.id }) {
+            rows[Self.maxRows - 1] = selected
+        }
+        return rows
+    }
+}
+
+/// "+2 more": a menu of the activities without a row; choosing one selects it.
+private struct MoreMenu: View {
+    let items: [any LiveActivity]
+    let select: (String) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(items, id: \.id) { activity in
+                Button(activity.title) { select(activity.id) }
+            }
+        } label: {
+            Text(verbatim: "+\(items.count) more")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(IsletTheme.secondaryText)
+                .frame(height: 16)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More activities")
+        // Under the rows' titles (6 + 52-pt minimal view + 8, less the menu button's own 3-pt inset).
+        .padding(.leading, 63)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

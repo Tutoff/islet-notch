@@ -92,6 +92,13 @@ final class DownloadActivity: LiveActivity {
         return isPaused ? "Download paused" : "Downloading"
     }
 
+    /// A row's short state: "Stalled", "Paused", "42%", or nothing when the size is unknown.
+    func status(of item: DownloadItem) -> String {
+        if isStalled(item) { return "Stalled" }
+        if item.isPaused { return "Paused" }
+        return item.isIndeterminate ? "" : DownloadFormat.percent(item.fraction)
+    }
+
     func detail(for item: DownloadItem) -> String {
         var parts: [String] = []
         if isStalled(item) { parts.append("Stalled") } else if item.isPaused { parts.append("Paused") }

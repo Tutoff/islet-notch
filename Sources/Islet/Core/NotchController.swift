@@ -38,8 +38,9 @@ struct IslandActions {
 /// Owns the panel and drives the island's state machine: hover, file drags, alerts, keyboard, quick menu.
 ///
 /// Sizing strategy: the panel always matches the visible island (so it never blocks clicks on the
-/// menu bar around it). When the island grows, the panel grows first and SwiftUI animates inside it;
-/// when it shrinks, the panel follows once the animation is over.
+/// menu bar around it). When the island grows, the panel grows on the next run loop turn (before the spring's second
+/// frame) and SwiftUI animates inside it; when it shrinks, the panel follows once the animation is over. The panel's top
+/// edge never moves and the island hangs from its top center whatever its size, so it always grows out of the notch.
 @MainActor
 final class NotchController {
     let model: IslandModel
@@ -178,7 +179,9 @@ final class NotchController {
         withObservationTracking {
             _ = model.size
         } onChange: { [weak self] in
-            // onChange runs before the new value is stored: apply on the next run loop turn.
+            // onChange runs before the new value is stored: apply on the next run loop turn. SwiftUI has usually laid
+            // out the first frame of the change by then, in the old panel: `IslandRootView` keeps the island hanging
+            // from the panel's top center so that frame, and the spring started from it, are right anyway.
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.syncPanelSize()
@@ -914,6 +917,25 @@ final class NotchController {
                 }
             }
         }
+        // `-debugOpenAfter 2`: opens the island that many seconds after launch through the path
+        // `-debugOpenVia hover|hotkey|command|alert|peek|wings` takes (hover by default, delay included), closes it
+        // `-debugCloseAfter` seconds later (1 by default) and repeats `-debugCycles` times. For frame captures. `alert`
+        // rings on the top activity: start one that doesn't drop foreign alerts (`-debugCommand sw`).
+        if defaults.object(forKey: "debugOpenAfter") != nil {
+            let delay = defaults.double(forKey: "debugOpenAfter")
+            let hold = defaults.object(forKey: "debugCloseAfter") == nil ? 1 : defaults.double(forKey: "debugCloseAfter")
+            let cycles = max(1, defaults.integer(forKey: "debugCycles"))
+            let via = defaults.string(forKey: "debugOpenVia") ?? "hover"
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                for _ in 0..<cycles {
+                    await self?.debugOpen(via: via)
+                    try? await Task.sleep(for: .seconds(hold))
+                    self?.debugClose(via: via)
+                    try? await Task.sleep(for: .seconds(hold))
+                }
+            }
+        }
         // `-debugRender out.png`: offscreen render (works with the display asleep). AppKit-backed subviews
         // (rings, drag overlays, equalizer layers) are not drawn by ImageRenderer.
         if let path = defaults.string(forKey: "debugRender") {
@@ -945,6 +967,53 @@ final class NotchController {
                 }
                 NSApp.terminate(nil)
             }
+        }
+    }
+
+    /// The open paths `-debugOpenAfter` exercises. The hotkey one leaves the keyboard alone (no `focusField`).
+    private func debugOpen(via: String) async {
+        let notchPoint = NSPoint(x: geometry.screenFrame.midX, y: geometry.screenFrame.maxY - 2)
+        NSLog("Islet debug: open via \(via) at \(ProcessInfo.processInfo.systemUptime)")
+        switch via {
+        case "hotkey":
+            model.resetOpenState()
+            model.showsLauncher = !LiveItems.current.isEmpty
+            open(tab: .live)
+        case "command":
+            _ = openFromCommand(tab: "live")
+        case "wings":
+            // Not an open: the closed island widens (implicit animation) for a transient.
+            var transient = IslandTransients.battery(.pluggedIn)
+            transient.duration = 3600
+            center.showTransient(transient)
+        case "alert":
+            if let top = center.ranked.first { center.requestAlert(for: top.id, kind: .ringing) }
+        case "peek":
+            withAnimation(Motion.open) {
+                model.isFileDragActive = true
+                model.phase = .peek
+            }
+            try? await Task.sleep(for: .milliseconds(700))
+            open(tab: .shelf)
+        default:
+            hoverChanged(true, at: notchPoint)
+        }
+    }
+
+    private func debugClose(via: String) {
+        NSLog("Islet debug: close via \(via) at \(ProcessInfo.processInfo.systemUptime)")
+        switch via {
+        case "alert":
+            center.dismissAlert()
+        case "wings":
+            center.dismissTransient()
+        case "peek":
+            model.isFileDragActive = false
+            close()
+        case "hover":
+            hoverChanged(false, at: NSPoint(x: geometry.screenFrame.midX, y: geometry.screenFrame.maxY - 400))
+        default:
+            close()
         }
     }
 

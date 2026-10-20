@@ -35,8 +35,8 @@ public enum IsletTheme {
     // MARK: Metrics
     public static let cardRadius: CGFloat = 14
     public static let smallRadius: CGFloat = 8
-    /// Inner padding of the open island content.
-    public static let contentPadding: CGFloat = 16
+    /// Inner padding of the open island content (from the island's straight sides, ears excluded).
+    public static let contentPadding: CGFloat = 12
 }
 
 /// Round icon button with a soft hover highlight — used for media controls and header actions.

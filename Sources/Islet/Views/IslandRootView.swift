@@ -7,13 +7,24 @@ struct IslandRootView: View {
     let actions: IslandActions
 
     var body: some View {
+        // The island hangs from the top center of the panel whatever the panel's size. The panel catches up with a
+        // growing island only after SwiftUI has laid out the first frame of its spring: an island larger than the
+        // panel must not be centered in it (what a flexible frame does), or the spring starts from that centered frame
+        // and the island grows out of a point below the notch (by half the growth) instead of out of the notch.
+        Color.clear
+            .overlay(alignment: .top) { island }
+            .ignoresSafeArea()
+            .environment(\.colorScheme, .dark)
+    }
+
+    private var island: some View {
         let size = model.size
         let shape = NotchShape(topRadius: model.topRadius, bottomRadius: model.bottomRadius)
         let insertion: AnyTransition = Motion.reduce
             ? .opacity
             : .opacity.combined(with: .scale(scale: 0.92, anchor: .top))
 
-        ZStack(alignment: .top) {
+        return ZStack(alignment: .top) {
             shape.fill(IsletTheme.background)
 
             Group {
@@ -29,7 +40,9 @@ struct IslandRootView: View {
                 }
             }
             .transition(.asymmetric(
-                insertion: insertion.animation(.easeOut(duration: 0.22).delay(0.06)),
+                insertion: insertion.animation(
+                    .easeOut(duration: Motion.contentInsertionDuration).delay(Motion.contentInsertionDelay)
+                ),
                 removal: .opacity.animation(.easeIn(duration: 0.08))
             ))
         }
@@ -40,9 +53,6 @@ struct IslandRootView: View {
         // springs.
         .animation(Motion.open, value: model.closedLayout)
         .animation(Motion.open, value: model.wingWidth)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .ignoresSafeArea()
-        .environment(\.colorScheme, .dark)
     }
 }
 

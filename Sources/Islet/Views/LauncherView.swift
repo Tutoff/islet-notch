@@ -1,46 +1,67 @@
+import AppKit
 import SwiftUI
 import IsletUI
 import ActivityCore
-import NowPlayingFeature
 
-/// Launcher grid (Timer, Stopwatch, Pomodoro, Alarm, Keep Awake, Meetings...) over the command field.
-/// A tile starts its activity, reveals its options (timer presets, Keep Awake durations) or pre-fills the field.
+/// The Live tab's Launch page: launcher tiles three per row (Timer, Stopwatch, Pomodoro / Alarm, Keep Awake,
+/// Meetings) over the command field. A tile starts its activity, reveals its options (timer presets, Keep Awake
+/// durations: they take the field's place, the page has no room for both) or pre-fills the field.
 struct LauncherView: View {
     let model: IslandModel
     let actions: IslandActions
+    /// The page is on screen: leaving it gives the keyboard back.
+    let isCurrent: Bool
+
+    private static let columns = 3
+    private static let spacing: CGFloat = 6
+    private static let barHeight: CGFloat = 30
 
     var body: some View {
         let launchers = ActivityCenter.shared.launchers
         let expanded = launchers.first { $0.id == model.expandedLauncherID && !$0.options.isEmpty }
+        let rows = stride(from: 0, to: launchers.count, by: Self.columns).map {
+            Array(launchers[$0..<min($0 + Self.columns, launchers.count)])
+        }
 
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                ForEach(launchers) { launcher in
-                    LauncherTile(launcher: launcher, isExpanded: launcher.id == expanded?.id) {
-                        actions.chooseLauncher(launcher)
+        VStack(spacing: 8) {
+            VStack(spacing: Self.spacing) {
+                ForEach(rows.indices, id: \.self) { index in
+                    HStack(spacing: Self.spacing) {
+                        ForEach(rows[index]) { launcher in
+                            LauncherTile(launcher: launcher, isExpanded: launcher.id == expanded?.id) {
+                                actions.chooseLauncher(launcher)
+                            }
+                        }
+                        // A short last row keeps the grid's column widths.
+                        ForEach(rows[index].count..<Self.columns, id: \.self) { _ in
+                            Color.clear.frame(maxWidth: .infinity)
+                        }
                     }
                 }
             }
-            .frame(height: 56)
+            .frame(maxHeight: .infinity)
 
-            if let expanded {
-                OptionChips(options: expanded.options, tint: expanded.tint) { option in
-                    actions.runFromLauncher(option.command)
-                }
-                .transition(.opacity)
-            } else if NowPlayingService.shared.track != nil {
-                MiniPlayer()
+            Group {
+                if let expanded {
+                    OptionChips(options: expanded.options, tint: expanded.tint, error: model.commandError,
+                                choose: { actions.runFromLauncher($0.command) },
+                                custom: {
+                                    model.expandedLauncherID = nil
+                                    actions.focusField()
+                                })
                     .transition(.opacity)
+                } else {
+                    CommandField(model: model, actions: actions, isCurrent: isCurrent)
+                        .transition(.opacity)
+                }
             }
-
-            Spacer(minLength: 0)
-
-            CommandField(model: model, actions: actions)
+            .frame(height: Self.barHeight)
         }
         .animation(IsletTheme.quick, value: expanded?.id)
     }
 }
 
+/// Tinted glyph on a soft disc, title and an optional status line ("Next alarm 7:30", "Connect…").
 private struct LauncherTile: View {
     let launcher: ActivityLauncher
     let isExpanded: Bool
@@ -48,35 +69,34 @@ private struct LauncherTile: View {
     @State private var hovering = false
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: IsletTheme.cardRadius - 2, style: .continuous)
         Button(action: action) {
-            VStack(spacing: 2) {
+            HStack(spacing: 9) {
                 Image(systemName: launcher.symbol)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(launcher.tint)
-                    .frame(height: 20)
-                Text(verbatim: launcher.title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(IsletTheme.primaryText)
-                if let status = launcher.status?() {
-                    Text(verbatim: status)
-                        .font(.system(size: 9, weight: .medium))
-                        .monospacedDigit()
-                        .foregroundStyle(IsletTheme.secondaryText)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(launcher.tint.opacity(isExpanded || hovering ? 0.26 : 0.17)))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: launcher.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(IsletTheme.primaryText)
+                    if let status = launcher.status?() {
+                        Text(verbatim: status)
+                            .font(.system(size: 10.5, weight: .medium))
+                            .monospacedDigit()
+                            .foregroundStyle(IsletTheme.secondaryText)
+                    }
                 }
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
             }
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 9)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: IsletTheme.smallRadius + 2, style: .continuous)
-                    .fill(isExpanded || hovering ? IsletTheme.cardHover : IsletTheme.card)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: IsletTheme.smallRadius + 2, style: .continuous)
-                    .strokeBorder(isExpanded ? launcher.tint.opacity(0.7) : IsletTheme.stroke, lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: IsletTheme.smallRadius + 2, style: .continuous))
+            .background(shape.fill(isExpanded || hovering ? IsletTheme.cardHover : IsletTheme.card))
+            .overlay(shape.strokeBorder(isExpanded ? launcher.tint.opacity(0.7) : IsletTheme.stroke, lineWidth: 1))
+            .contentShape(shape)
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -85,75 +105,34 @@ private struct LauncherTile: View {
     }
 }
 
-/// One-line player under the tiles: a paused track (which doesn't count as a running activity) stays at hand
-/// while the launcher is up. Clicking the title opens the player app.
-private struct MiniPlayer: View {
-    private let service = NowPlayingService.shared
-
-    /// The artist, else the app for sources other than Music and Spotify (a video in Safari has no artist).
-    private func detail(_ track: NowPlayingTrack) -> String? {
-        if !track.artist.isEmpty { return track.artist }
-        return service.showsSourceApp ? service.sourceAppName : nil
-    }
-
-    var body: some View {
-        if let track = service.track {
-            HStack(spacing: 6) {
-                NowPlayingCompactLeading()
-                    .frame(width: 20, height: 20)
-                (Text(verbatim: track.title).foregroundStyle(IsletTheme.primaryText)
-                    + Text(verbatim: detail(track).map { "  ·  \($0)" } ?? "").foregroundStyle(IsletTheme.secondaryText))
-                    .font(.system(size: 11, weight: .semibold))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { service.openSourceApp() }
-                if service.automationDenied {
-                    Button("Allow Control") { service.openAutomationSettings() }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(IsletTheme.accent)
-                } else {
-                    Group {
-                        Button { service.previous() } label: { Image(systemName: "backward.fill") }
-                            .accessibilityLabel("Previous")
-                        Button { service.playPause() } label: {
-                            Image(systemName: service.isPlaying ? "pause.fill" : "play.fill")
-                        }
-                        .accessibilityLabel(service.isPlaying ? "Pause" : "Play")
-                        Button { service.next() } label: { Image(systemName: "forward.fill") }
-                            .accessibilityLabel("Next")
-                    }
-                    .font(.system(size: 10, weight: .semibold))
-                    .buttonStyle(IslandIconButtonStyle(size: 22))
-                }
-            }
-            .padding(.leading, 5)
-            .padding(.trailing, 3)
-            .frame(height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: IsletTheme.smallRadius, style: .continuous)
-                    .fill(IsletTheme.card)
-            )
-        }
-    }
-}
-
-/// [1m] [3m] [5m] ... or [30m] [1h] [2h] [∞].
+/// [1m] [3m] [5m] ... [Custom…] or [30m] [1h] [2h] [∞] [Custom…], in the command field's place. "Custom…" brings the
+/// field back with the keyboard ("tea 4m", "awake 45m").
 private struct OptionChips: View {
     let options: [LauncherOption]
     let tint: Color
+    let error: String?
     let choose: (LauncherOption) -> Void
+    let custom: () -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(options) { option in
-                    Chip(title: option.title, tint: tint) { choose(option) }
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(options) { option in
+                        Chip(title: option.title, tint: tint) { choose(option) }
+                    }
+                    Chip(title: "Custom…", tint: IsletTheme.secondaryText, action: custom)
+                        .help("Type a duration in the command field")
                 }
             }
+            if let error {
+                Text(verbatim: error)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(IsletTheme.danger)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
         }
-        .frame(height: 22)
     }
 }
 
@@ -166,12 +145,12 @@ private struct Chip: View {
     var body: some View {
         Button(action: action) {
             Text(verbatim: title)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(hovering ? IsletTheme.primaryText : tint)
                 .lineLimit(1)
-                .padding(.horizontal, 10)
-                .frame(height: 22)
+                .padding(.horizontal, 12)
+                .frame(height: 26)
                 .background(Capsule().fill(hovering ? tint.opacity(0.35) : tint.opacity(0.16)))
                 .contentShape(Capsule())
         }
@@ -185,6 +164,7 @@ private struct Chip: View {
 private struct CommandField: View {
     @Bindable var model: IslandModel
     let actions: IslandActions
+    let isCurrent: Bool
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -194,7 +174,7 @@ private struct CommandField: View {
                 .foregroundStyle(focused ? IsletTheme.accent : IsletTheme.tertiaryText)
             TextField("25m · tea 4m · pomo · at 7:30 · awake 2h", text: $model.commandText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(IsletTheme.primaryText)
                 .focused($focused)
                 .onSubmit { actions.submit(model.commandText) }
@@ -204,14 +184,14 @@ private struct CommandField: View {
                 .lineLimit(1)
                 .fixedSize()
         }
-        .padding(.horizontal, 10)
-        .frame(height: 28)
+        .padding(.horizontal, 11)
+        .frame(maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: IsletTheme.smallRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: IsletTheme.smallRadius + 1, style: .continuous)
                 .fill(IsletTheme.card)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: IsletTheme.smallRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: IsletTheme.smallRadius + 1, style: .continuous)
                 .strokeBorder(focused ? IsletTheme.accent.opacity(0.6) : IsletTheme.stroke, lineWidth: 1)
         )
         .contentShape(Rectangle())
@@ -220,13 +200,21 @@ private struct CommandField: View {
             if !focused || !model.isKey { actions.focusField() }
         })
         .onAppear {
-            if model.isKey { focused = true }
+            if model.isKey { takeFocus() }
         }
         .onChange(of: model.fieldFocusRequest) {
-            focused = true
+            takeFocus()
+        }
+        // Scrolled to another page: typing must not land in a field nobody sees.
+        .onChange(of: isCurrent) { _, current in
+            if !current { focused = false }
         }
         .onChange(of: focused) { _, isFocused in
             model.isEditing = isFocused
+            // A pre-filled "at " would be selected (typing would replace it): caret after it.
+            if isFocused, !model.commandText.isEmpty {
+                DispatchQueue.main.async { Self.placeCaretAtEnd() }
+            }
         }
         .onChange(of: model.commandText) {
             model.commandError = nil
@@ -234,6 +222,19 @@ private struct CommandField: View {
         .onDisappear {
             model.isEditing = false
         }
+    }
+
+    /// The Launch page is built as the pager scrolls to it: the field may join the window a turn later.
+    private func takeFocus() {
+        focused = true
+        DispatchQueue.main.async { [model] in
+            if model.isKey, !focused { focused = true }
+        }
+    }
+
+    private static func placeCaretAtEnd() {
+        guard let editor = NSApp.keyWindow?.firstResponder as? NSTextView else { return }
+        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
     }
 
     @ViewBuilder

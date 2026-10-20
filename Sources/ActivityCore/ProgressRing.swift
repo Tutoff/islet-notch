@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Progress ring drawn by Core Animation (CAShapeLayer, low frame-rate cap): a running countdown costs the
 /// app ~0 CPU. Positions always come from dates (CA's clock stops during sleep); re-syncs on
-/// `ActivityScheduler.resyncNotification` and when moved to a window.
+/// `ActivityScheduler.resyncNotification` and when moved to a window. Static while `ticksActive` is false.
 ///
 /// The arc starts at 12 o'clock and runs clockwise; `strokeEnd` is the shown fraction, so a countdown
 /// shrinks back toward 12 o'clock and a paused one (`.fraction`) looks exactly like the running one.
@@ -33,13 +33,13 @@ public struct ProgressRing: NSViewRepresentable {
 
     public func makeNSView(context: Context) -> NSView {
         let view = ProgressRingNSView(frame: .zero)
-        apply(to: view)
+        apply(to: view, isActive: context.environment.ticksActive)
         return view
     }
 
     public func updateNSView(_ nsView: NSView, context: Context) {
         guard let view = nsView as? ProgressRingNSView else { return }
-        apply(to: view)
+        apply(to: view, isActive: context.environment.ticksActive)
     }
 
     public func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView, context: Context) -> CGSize? {
@@ -48,15 +48,17 @@ public struct ProgressRing: NSViewRepresentable {
         return CGSize(width: side, height: side)
     }
 
-    private func apply(to view: ProgressRingNSView) {
+    private func apply(to view: ProgressRingNSView, isActive: Bool) {
         view.lineWidth = lineWidth
         view.tint = tint
+        // Before the mode: a mode change on an inactive ring must not start an animation.
+        view.isActive = isActive
         view.mode = mode
     }
 }
 
 /// Layer-backed view with a track and a progress `CAShapeLayer`. Animations are handed to the render
-/// server once (no per-frame work in the app) and removed while the view is not in a window.
+/// server once (no per-frame work in the app) and removed while the view is not in a window or not active.
 @MainActor
 final class ProgressRingNSView: NSView {
     /// 16-pt ring: ~1 px per 15 s on a 25-min timer, so 2 fps is plenty.
@@ -93,6 +95,18 @@ final class ProgressRingNSView: NSView {
             needsLayout = true
         }
     }
+
+    /// False while the ring's content can't be seen (`EnvironmentValues.ticksActive`): drawn at its current
+    /// value, no animation, as out of a window. A page scrolled away can stay in the window.
+    var isActive = true {
+        didSet {
+            guard isActive != oldValue else { return }
+            updateLiveness()
+        }
+    }
+
+    /// In a window and active: the only state in which animations run.
+    private var isLive: Bool { window != nil && isActive }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -147,9 +161,13 @@ final class ProgressRingNSView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window != nil {
+        if window != nil { updateContentsScale() }
+        updateLiveness()
+    }
+
+    private func updateLiveness() {
+        if isLive {
             observeResync()
-            updateContentsScale()
             sync(animateFraction: false)
         } else {
             stopObservingResync()
@@ -180,7 +198,7 @@ final class ProgressRingNSView: NSView {
 
     /// Re-derives the ring from `mode` and the current date. Never trusts CA's clock across sleep.
     private func sync(animateFraction: Bool) {
-        guard window != nil, lastSize != .zero else {
+        guard isLive, lastSize != .zero else {
             setStaticValue()
             return
         }
@@ -248,7 +266,7 @@ final class ProgressRingNSView: NSView {
         }
     }
 
-    /// Model value without animations (off screen, or before the first layout).
+    /// Model value without animations (off screen, inactive, or before the first layout).
     private func setStaticValue() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)

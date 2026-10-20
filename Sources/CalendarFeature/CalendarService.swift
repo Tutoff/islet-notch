@@ -27,7 +27,7 @@ struct CalendarInfo: Identifiable, Equatable {
 
 /// EventKit access and event fetching. No `EKEventStore` exists until the user connects (it costs ≈ 1 MB);
 /// afterwards everything is event-driven: store changes (debounced) and the scheduler's resync (wake, clock,
-/// time zone, day change), which also moves the 24 h window forward.
+/// time zone, day change), which also moves the window (now → end of tomorrow) forward.
 @MainActor @Observable
 final class CalendarService {
     static let shared = CalendarService()
@@ -38,7 +38,8 @@ final class CalendarService {
 
     static let privacySettingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!
 
-    /// Last known authorization (refreshed on connect, on launch when connected, and when Settings shows).
+    /// Last known authorization (refreshed on connect, on launch when connected, when Settings shows, and when the
+    /// Calendar page or Islet becomes active while the calendar isn't read).
     private(set) var access: Access = .notDetermined
     private(set) var isConnected: Bool
     private(set) var isRunning = false
@@ -46,7 +47,8 @@ final class CalendarService {
     /// A problem to show in Settings (request failed, missing usage description).
     private(set) var problem: String?
     private(set) var calendars: [CalendarInfo] = []
-    /// Eligible events of the next 24 h, by start (dismissed ones included; the controller filters them).
+    /// Eligible events from now to the end of tomorrow, by start (dismissed ones included; the controller filters them,
+    /// the island's Calendar page lists them all).
     private(set) var events: [MeetingEvent] = []
 
     var leadMinutes: Int {
@@ -68,6 +70,8 @@ final class CalendarService {
     @ObservationIgnored private let defaults = UserDefaults.standard
     /// Islet sent the user to System Settings to allow access: coming back with access connects.
     @ObservationIgnored private var awaitingGrant = false
+    /// `accessMayHaveChanged()`'s status read is under way: calls meanwhile join it.
+    @ObservationIgnored private var accessReadInFlight = false
     @ObservationIgnored private var store: EKEventStore?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var fetchGeneration = 0
@@ -76,7 +80,13 @@ final class CalendarService {
     private static let refetchKey = "calendar.refetch"
     private static let horizonKey = "calendar.horizon"
     private static let changeDebounce: TimeInterval = 1.5
-    private static let window: TimeInterval = 24 * 3600
+
+    /// End of the fetch window: the end of tomorrow (the Calendar page lists today, then tomorrow; ≥ 24 h ahead).
+    private static func horizon(from date: Date) -> Date {
+        let calendar = Calendar.current
+        return calendar.date(byAdding: .day, value: 2, to: calendar.startOfDay(for: date))
+            ?? date.addingTimeInterval(48 * 3600)
+    }
 
     private init() {
         defaults.register(defaults: [
@@ -98,19 +108,22 @@ final class CalendarService {
 
     // MARK: Access
 
-    /// Reads the authorization status: no prompt, no store.
+    /// Reads the authorization status: no prompt, no store. Synchronous, and it asks TCC (tens of ms): for paths
+    /// that need the answer right away, never during an animation (see `accessMayHaveChanged()`).
     func refreshAccess() {
-        let status = EKEventStore.authorizationStatus(for: .event)
-        let value: Access
-        switch status {
-        case .notDetermined: value = .notDetermined
-        case .restricted: value = .restricted
-        case .denied: value = .denied
-        case .writeOnly: value = .writeOnly
-        case .fullAccess: value = .fullAccess
-        @unknown default: value = .denied
-        }
+        let value = Self.access(for: EKEventStore.authorizationStatus(for: .event))
         if access != value { access = value }
+    }
+
+    private static func access(for status: EKAuthorizationStatus) -> Access {
+        switch status {
+        case .notDetermined: .notDetermined
+        case .restricted: .restricted
+        case .denied: .denied
+        case .writeOnly: .writeOnly
+        case .fullAccess: .fullAccess
+        @unknown default: .denied
+        }
     }
 
     /// Launch: resumes only if the user connected earlier and full access is still granted (never prompts).
@@ -143,9 +156,25 @@ final class CalendarService {
         NSWorkspace.shared.open(Self.privacySettingsURL)
     }
 
-    /// Islet became active again (e.g. back from System Settings): picks up a grant without another click.
+    /// Islet became active again (e.g. back from System Settings) or the Calendar page came into view: picks up a
+    /// grant without another click. Only while the calendar isn't read (a running service sees a revocation in
+    /// `refetch()`). The status read runs off the main thread, so a page sliding in never waits for TCC, and calls
+    /// made while it is under way share it.
     func accessMayHaveChanged() {
-        refreshAccess()
+        guard !isRunning, !isRequesting, !accessReadInFlight else { return }
+        accessReadInFlight = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let status = EKEventStore.authorizationStatus(for: .event)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { CalendarService.shared.finishAccessRead(status) }
+            }
+        }
+    }
+
+    private func finishAccessRead(_ status: EKAuthorizationStatus) {
+        accessReadInFlight = false
+        let value = Self.access(for: status)
+        if access != value { access = value }
         guard !isRunning, !isRequesting, access == .fullAccess, isConnected || awaitingGrant else { return }
         awaitingGrant = false
         setConnected(true)
@@ -270,7 +299,7 @@ final class CalendarService {
             return
         }
         // EventKit fetches are synchronous: run them off the main thread, hand back value types.
-        let request = FetchRequest(store: store, calendars: selected, start: now, end: now.addingTimeInterval(Self.window))
+        let request = FetchRequest(store: store, calendars: selected, start: now, end: Self.horizon(from: now))
         fetchQueue.async {
             let result = request.run()
             DispatchQueue.main.async {

@@ -159,15 +159,26 @@ private struct DownloadDetail: View {
     }
 }
 
-/// Several files: one row each (scrolls past three).
+/// Several files: one row each, as many as the card has room for, then "+N more" (a menu of the others, each with
+/// its own Cancel; Show in Finder and Cancel All act on every file).
 private struct DownloadRows: View {
     let activity: DownloadActivity
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 6) {
-                ForEach(activity.items) { item in
-                    DownloadRow(activity: activity, item: item)
+        FittingRows(items: activity.items, rowHeight: 16) { item in
+            DownloadRow(activity: activity, item: item)
+        } more: { hidden in
+            // Under the names: 16-pt icon + 8, less the menu button's own 3-pt inset.
+            MoreFilesMenu(count: hidden.count, leading: 21, help: "More downloads") {
+                ForEach(hidden) { item in
+                    let title = [item.name, activity.status(of: item)].filter { !$0.isEmpty }.joined(separator: " · ")
+                    if item.isCancellable {
+                        Menu(title) {
+                            Button("Cancel Download") { activity.controller?.cancel(item.id) }
+                        }
+                    } else {
+                        Text(verbatim: title)
+                    }
                 }
             }
         }
@@ -196,7 +207,7 @@ private struct DownloadRow: View {
                             tint: stalled ? IsletTheme.warning : item.isPaused ? IsletTheme.secondaryText : activity.tint)
                     .frame(width: 56, height: 3)
             }
-            Text(stalled ? "Stalled" : item.isPaused ? "Paused" : item.isIndeterminate ? "" : DownloadFormat.percent(item.fraction))
+            Text(activity.status(of: item))
                 .font(.system(size: 11, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(stalled ? IsletTheme.warning : IsletTheme.secondaryText)
@@ -217,28 +228,95 @@ private struct DownloadRow: View {
     }
 }
 
-/// Files that finished while their alert waits (behind another alert).
+/// Files that finished while their alert waits (behind another alert), as many as fit, then "+N more" (a menu that
+/// opens the others; Open and Show in Finder act on every file).
 private struct FinishedDownloadList: View {
     let activity: DownloadActivity
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(activity.finished) { file in
-                    HStack(spacing: 8) {
-                        DraggableFileIcon(urls: [file.url], name: file.name, size: 20) {
-                            activity.controller?.open([file.url])
-                        }
-                        Text(file.name)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(IsletTheme.primaryText)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
+        FittingRows(items: activity.finished, rowHeight: 20) { file in
+            HStack(spacing: 8) {
+                DraggableFileIcon(urls: [file.url], name: file.name, size: 20) {
+                    activity.controller?.open([file.url])
+                }
+                Text(file.name)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(IsletTheme.primaryText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        } more: { hidden in
+            // Under the names: 20-pt icon + 8, less the menu button's own 3-pt inset.
+            MoreFilesMenu(count: hidden.count, leading: 25, help: "More files") {
+                ForEach(hidden) { file in
+                    Button(file.name) { activity.controller?.open([file.url]) }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// The first rows that fit the height given, then a "+N more" line for the rest. Not a scroll view: the card sits in
+/// the Live tab's vertical pager, which must get the trackpad's swipes over it too. Rows have a fixed height, so the
+/// count follows from the height alone (≈ 99 pt beside the card's buttons, ≈ 61 pt above them). Not ViewThatFits
+/// either: it would build every candidate's rings and bars to measure them.
+private struct FittingRows<Item: Identifiable, Row: View, More: View>: View {
+    let items: [Item]
+    let rowHeight: CGFloat
+    @ViewBuilder let row: (Item) -> Row
+    @ViewBuilder let more: ([Item]) -> More
+
+    @State private var height: CGFloat?
+
+    private static var spacing: CGFloat { 6 }
+    private static var moreHeight: CGFloat { 16 }
+
+    var body: some View {
+        let shown = Self.shownCount(total: items.count, rowHeight: rowHeight, in: height)
+        VStack(alignment: .leading, spacing: Self.spacing) {
+            ForEach(items.prefix(shown)) { item in
+                row(item).frame(height: rowHeight)
+            }
+            if shown < items.count {
+                more(Array(items.dropFirst(shown))).frame(height: Self.moreHeight)
+            }
+        }
+        // minHeight 0: exactly the height offered, never the rows' (the count must follow the card, not itself).
+        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
+        .clipped()
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height = $0 }
+    }
+
+    /// Every row when they all fit, else as many as fit above the "+N more" line (at least one).
+    private static func shownCount(total: Int, rowHeight: CGFloat, in height: CGFloat?) -> Int {
+        guard let height, total > 1 else { return total }
+        let all = CGFloat(total) * rowHeight + CGFloat(total - 1) * spacing
+        if all <= height + 0.5 { return total }
+        let fitting = Int(((height - moreHeight) / (rowHeight + spacing) + 0.01).rounded(.down))
+        return min(total - 1, max(1, fitting))
+    }
+}
+
+/// "+2 more" under the rows: a borderless menu of the files without a row.
+private struct MoreFilesMenu<Content: View>: View {
+    let count: Int
+    let leading: CGFloat
+    let help: LocalizedStringKey
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        Menu(content: content) {
+            Text(verbatim: "+\(count) more")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(IsletTheme.secondaryText)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(help)
+        .padding(.leading, leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

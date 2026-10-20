@@ -24,8 +24,14 @@ final class IslandModel {
     }
 
     enum Metrics {
-        static let openWidth: CGFloat = 600
-        static let openContentHeight: CGFloat = 150
+        /// Narrow, but two activity cards side by side keep the ≈ 240 pt a timer card needs ("24:59  Ends at 10:50 PM").
+        /// The header (tabs · 179 pt notch · + ⋯) fits with room to spare.
+        static let openWidth: CGFloat = 552
+        /// One Live page: two rows of launcher tiles and the command field, or the artwork nearly edge to edge.
+        static let openContentHeight: CGFloat = 160
+        /// Margins of the open island's content under the header row.
+        static let openContentTop: CGFloat = 4
+        static let openContentBottom: CGFloat = 12
         static let peekExtraWidth: CGFloat = 64
         static let peekExtraHeight: CGFloat = 30
         static let alertWidth: CGFloat = 440
@@ -44,7 +50,8 @@ final class IslandModel {
     /// Activity selected in the open island (the wing the pointer came in over, a list row, the alert's).
     /// Nil: the highest priority one.
     var focusedActivityID: String?
-    /// The "+" launcher is shown over the Live tab's activities.
+    /// The Live tab shows its Launch page ("+", ⌃⌥Space, "Alarm…" set it; `LiveTabView` keeps it in sync with the page
+    /// the user scrolls to, so "+" and Esc always mean "leave the launcher").
     var showsLauncher = false
     /// Launcher tile whose options (timer presets, Keep Awake durations) are revealed.
     var expandedLauncherID: String?
@@ -120,7 +127,7 @@ final class IslandModel {
 
     var topRadius: CGFloat {
         switch phase {
-        case .open: 14
+        case .open: 12
         case .alert: 12
         case .peek: 9
         case .closed: 6
@@ -143,4 +150,10 @@ enum Motion {
     static var reduce: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     static var open: Animation { reduce ? IsletTheme.close : IsletTheme.open }
     static var close: Animation { IsletTheme.close }
+
+    /// A phase's content fades (and, without Reduce Motion, scales) in after this delay, for this long.
+    static let contentInsertionDelay: TimeInterval = 0.06
+    static let contentInsertionDuration: TimeInterval = 0.22
+    /// When the inserted content has settled.
+    static var contentInsertionEnd: TimeInterval { contentInsertionDelay + contentInsertionDuration }
 }

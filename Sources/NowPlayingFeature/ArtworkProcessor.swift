@@ -15,8 +15,9 @@ struct ProcessedArtwork: @unchecked Sendable {
 
 /// Downsampling, accent color extraction and the (rare, on-demand) artwork download.
 enum ArtworkProcessor {
-    /// 2× the largest display size (≈ 78 pt in the open island).
-    static let maxPixelSize = 160
+    /// 2× the largest display size: the 144-pt cover on the open island's Music page (`NowPlayingExpandedView`
+    /// fills the page's height with it). The short side gets this many pixels, as the cover fills a square.
+    static let maxPixelSize = 288
 
     /// Ephemeral, cache-less: nothing is written to disk and nothing lingers in memory.
     private static let configuration: URLSessionConfiguration = {
@@ -31,8 +32,8 @@ enum ArtworkProcessor {
         return configuration
     }()
 
-    /// Decodes straight to a ≤ 160 px thumbnail (JPEGs are decoded subsampled, the full-size bitmap
-    /// is never materialised) and computes the accent color. Call off the main thread.
+    /// Decodes straight to a thumbnail whose short side is ≤ 288 px (JPEGs are decoded subsampled, the
+    /// full-size bitmap is never materialised) and computes the accent color. Call off the main thread.
     static func process(_ data: Data) -> ProcessedArtwork? {
         autoreleasepool {
             let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
@@ -41,11 +42,23 @@ enum ArtworkProcessor {
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+                kCGImageSourceThumbnailMaxPixelSize: thumbnailLongSide(of: source),
             ] as CFDictionary
             guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else { return nil }
             return ProcessedArtwork(image: image, accent: accentColor(of: image))
         }
+    }
+
+    /// The thumbnail option bounds the long side: scale it so the short side gets `maxPixelSize` (a 16:9 video
+    /// thumbnail, cropped to the square, would be soft otherwise). Capped at twice that for extreme shapes.
+    private static func thumbnailLongSide(of source: CGImageSource) -> Int {
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
+              let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
+              width > 0, height > 0
+        else { return maxPixelSize }
+        let ratio = max(width, height) / min(width, height)
+        return min(2 * maxPixelSize, Int((Double(maxPixelSize) * ratio).rounded(.up)))
     }
 
     /// Fetches the first URL that yields a decodable image. Completion runs on a background queue.

@@ -9,9 +9,10 @@ montre ce que joue **n'importe quelle app** (Musique, Spotify, YouTube dans le n
 déplacer des fichiers.
 
 <p align="center">
-  <img src="docs/apercu/2-ouverte-deux-activites.png" width="600" alt="Île ouverte : un minuteur et un chrono">
-  <img src="docs/apercu/4-ouverte-lanceur.png" width="600" alt="Lanceur : minuteur, chrono, Pomodoro, alarme, Keep Awake">
-  <img src="docs/apercu/8-alerte.png" width="415" alt="Alerte de fin de minuteur">
+  <img src="docs/apercu/3-musique.png" width="552" alt="Page Musique : grande pochette, titre, progression, commandes">
+  <img src="docs/apercu/2-ouverte-deux-activites.png" width="552" alt="Page En cours : un minuteur et un chrono">
+  <img src="docs/apercu/5-calendrier.png" width="552" alt="Page Calendrier : le jour et les prochains événements">
+  <img src="docs/apercu/4-ouverte-lanceur.png" width="552" alt="Page Lancer : minuteur, chrono, Pomodoro, alarme, Keep Awake, réunions">
 </p>
 
 Objectif n°1 : être invisible pour le système. Mesuré sur un MacBook Air M5 (macOS 26.5), build release :
@@ -72,16 +73,26 @@ L'île fermée montre ce qui tourne, comme sur iPhone :
 - **alertes** : un minuteur qui sonne déploie une carte « Thé · Terminé » avec Stop / +1 min / Recommencer ;
 - **notifications éphémères** : chargeur branché, AirPods connectés, fichiers ajoutés à l'étagère (2–3 s).
 
-Survoler l'île l'ouvre sur l'onglet **Live** :
+Survoler l'île l'ouvre sur l'onglet **Live**, fait de pages verticales qu'on fait défiler une à une (deux
+doigts sur le trackpad, un cran de molette, ↑/↓ quand l'île a le clavier, ou les points à droite) :
 
-- sans activité, une grille de lancement (Minuteur et ses préréglages, Chrono, Pomodoro, Alarme,
-  Keep Awake, Réunions), un mini-lecteur si un morceau est en pause, les pastilles de non-lus dans une
-  colonne à droite, et une barre de commande (un morceau en pause et les non-lus ne comptent pas comme
-  des activités) ;
-- le bouton « + » de l'en-tête affiche cette grille à tout moment ;
-- avec une activité, sa carte et ses contrôles (pause, +1 min, tour, muet, Rejoindre…), plus la carte
-  des non-lus s'il y en a ;
-- avec plusieurs, une liste à gauche et la carte sélectionnée à droite.
+- **Maintenant** (seulement si quelque chose tourne) : les activités en cours, minuteurs, chrono, Pomodoro,
+  Keep Awake, appel, téléchargements, minuteurs de l'app Horloge, activités personnalisées, non-lus. Une
+  carte, deux cartes côte à côte, ou à partir de trois une liste (4 lignes, puis « +N ») et la carte choisie ;
+- **Musique** : ce qui joue (ou est en pause) en grand, pochette presque bord à bord, titre, artiste, barre
+  de progression courte et commandes aux couleurs de la pochette ; « Nothing playing » sinon ;
+- **Calendrier** : une tuile avec la date du jour (comme l'icône de l'app Calendrier) et les prochains
+  événements, ce qui reste d'aujourd'hui puis demain (4 au plus, badge « Now » pour celui en cours, bouton
+  Join pour un appel vidéo). Avant la connexion, la tuile et « Connect Calendar… » (la permission n'est
+  demandée qu'à ce clic) ;
+- **Lancer** : les tuiles Minuteur, Chrono, Pomodoro, Alarme, Keep Awake et Réunions sur deux rangées, puis
+  la barre de commande (les préréglages d'une tuile prennent sa place, « Custom… » la ramène).
+
+L'île s'ouvre sur Maintenant quand quelque chose tourne, sinon sur Musique ; le bouton « + » de l'en-tête,
+**⌃⌥Espace** et « Alarme… » mènent à Lancer, curseur dans la barre de commande. Rien n'est mémorisé d'une
+ouverture à l'autre. Une page sortie de l'écran s'arrête (plus aucune seconde ne s'y rafraîchit). L'en-tête
+n'affiche plus la batterie : elle est juste à côté, dans la barre des menus (les notices branché / batterie
+faible restent).
 
 | Activité | Ce qu'elle fait |
 | --- | --- |
@@ -121,9 +132,8 @@ la carte affiche le navigateur (« Chaîne · Google Chrome », icône du naviga
 
 **Pastilles de non-lus.** Islet lit le badge du Dock (`StatusLabel` de LaunchServices) des apps choisies tant
 qu'elles tournent. L'île fermée montre l'icône de la dernière app qui a reçu quelque chose et le total ; une
-notice « Teams · 3 » passe quand un compteur augmente. Dans l'onglet Live, les non-lus se rangent à côté de la
-grille de lancement quand rien d'autre ne tourne, sinon ils ont leur carte parmi les activités ; une tuile par
-app (un clic ouvre l'app).
+notice « Teams · 3 » passe quand un compteur augmente. Dans l'onglet Live, les non-lus ont leur carte sur la
+page Maintenant (seuls, ils n'en font pas la page d'ouverture) ; une tuile par app (un clic ouvre l'app).
 - Suivies par défaut : Messages, WhatsApp, Teams, Slack, Discord, Telegram, Signal, Messenger. Mail et
   Outlook sont listés mais désactivés (leurs compteurs se comptent en centaines). Toute app qui affiche une
   pastille peut être ajoutée dans Réglages → Live Activities → Unread badges.
@@ -150,7 +160,7 @@ Ouvrir. Les indicateurs micro et caméra ne doublent plus l'appel. Réglage « S
 | --- | --- |
 | Barre de commande (onglet Live, ou **⌃⌥Espace** depuis n'importe où) | `25m` · `thé 4m` · `+5` · `pomo` · `chrono` · `réveil 7h30 sport` · `awake 2h` |
 | Clic droit sur l'île | Nouveau minuteur, chrono, Keep Awake, et les actions de chaque activité (épingler, masquer 10 min) |
-| Clavier quand l'île a le focus | ←/→ choisir une activité, Espace pause/reprise, ⌫ terminer, Échap fermer |
+| Clavier quand l'île a le focus | ↑/↓ changer de page ; sur Maintenant ←/→ choisir une activité, Espace pause/reprise, ⌫ terminer ; sur Musique Espace lecture/pause ; Échap fermer |
 | Liens `islet://` (Raccourcis, Raycast, Alfred) | `islet://timer/start?d=25m&label=Thé` · `islet://stopwatch/start` · `islet://awake?d=2h` · `islet://open?tab=shelf` |
 | Ligne de commande | `islet timer 25m --label Thé` · `islet status` · `islet open clock` (ouvre l'app Horloge) |
 
@@ -230,7 +240,7 @@ Sources/
   ClockAppFeature/    miroir en lecture seule de l'app Horloge (base SQLite de mobiletimerd)
   DevicesFeature/     micro/caméra (CoreAudio, CoreMediaIO), app en appel, AirPods et sortie audio
   BatteryFeature/     batterie et économie d'énergie
-  CalendarFeature/    réunion suivante (EventKit)
+  CalendarFeature/    réunion suivante et page Calendrier (EventKit)
   DownloadsFeature/   progression des téléchargements (NSProgress)
   CustomFeature/      serveur de contrôle (CFMessagePort) et activités personnalisées
   NowPlayingFeature/  lecture en cours : Musique et Spotify, autres apps par MediaRemote (+ lecteur perl)
@@ -292,13 +302,16 @@ En build debug, des arguments de lancement forcent un état (utile pour les capt
 swift build && .build/debug/Islet -debugPhase open -debugCommand "25m,chrono" -debugRender sortie.png
 ```
 
-`-debugPhase open|peek|alert`, `-debugTab shelf|launcher`, `-debugCommand "a,b"`, `-debugURL islet://…`,
+`-debugPhase open|peek|alert`, `-debugTab shelf|launcher`, `-debugPage now|music|calendar|launch` (page de
+l'onglet Live à la première ouverture), `-debugCalendar 1|empty` (événements fictifs sur la page Calendrier,
+rien n'est lu), `-debugCommand "a,b"`, `-debugURL islet://…`,
 `-debugShelf a:b`, `-debugDrag 1`, `-debugTransient battery|shelf`, `-debugRender sortie.png` (rendu hors
 écran puis quitte ; les vues AppKit y apparaissent en jaune), `-debugSnapshot sortie.png` (le panel réel),
 `-debugClockDB <dossier ou local.sqlite>` (le miroir Horloge lit cette copie au lieu de la vraie base),
 `-debugCall com.microsoft.teams2` (appel simulé commencé il y a 12:34), `-debugBadges
 "com.microsoft.teams2=3,com.apple.MobileSMS=12"` (pastilles simulées, rien n'est lu),
 `-debugMedia com.google.Chrome` (vidéo simulée dans cette app, aucun lecteur n'est lu ni piloté),
+`-debugDownloads 5|done:4` (téléchargements simulés, en cours ou terminés ; rien n'est surveillé ni lu),
 `-debugSettings sortie.png -debugTab live -debugSettingsHeight 4200` (le volet de réglages en entier).
 
 Hors du bundle, la lecture des autres apps a besoin de la bibliothèque (builds debug uniquement) :

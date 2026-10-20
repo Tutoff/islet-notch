@@ -42,6 +42,10 @@ final class DownloadsController {
     /// The alert was clicked, which opens the island on this activity: the finished files stay (with their Open /
     /// Show in Finder / Add to Shelf) until the card goes away or one of them is used.
     private var keepsFinishedForCard = false
+    #if DEBUG
+    /// Keep the simulated transfers' identifiers alive.
+    private var debugAnchors: [NSObject] = []
+    #endif
     /// Expanded cards on screen (a layout change can briefly show the new one before removing the old). A set, so
     /// a repeated appear or disappear can't skew it.
     private var visibleCards: Set<UUID> = []
@@ -54,6 +58,9 @@ final class DownloadsController {
         guard !installed else { return }
         installed = true
         activity.controller = self
+        #if DEBUG
+        if showDebugDownloads() { return }
+        #endif
         setEnabled(DownloadsSettings.shared.isEnabled)
     }
 
@@ -315,4 +322,39 @@ final class DownloadsController {
             }
         }
     }
+
+    // MARK: Debug
+
+    #if DEBUG
+    /// `-debugDownloads 5`: that many simulated transfers in mixed states; `done:4`: that many finished files in the
+    /// card. Nothing is watched, read, opened or cancelled.
+    private func showDebugDownloads() -> Bool {
+        guard let spec = UserDefaults.standard.string(forKey: "debugDownloads") else { return false }
+        let finished = spec.hasPrefix("done:")
+        let count = max(1, Int(finished ? String(spec.dropFirst(5)) : spec) ?? 3)
+        let names = ["Quarterly-Report-2026.pdf", "Xcode_26.1.xip", "holiday-photos.zip", "Podcast 142.mp3",
+                     "design-system-v4.sketch", "invoice-0193.pdf", "dataset.csv", "Keynote.key"]
+        let now = Date()
+        for index in 0..<count {
+            let name = names[index % names.count]
+            let url = directory.appendingPathComponent(name)
+            if finished {
+                activity.finished.append(FinishedDownload(name: name, url: url))
+                continue
+            }
+            let anchor = NSObject()
+            debugAnchors.append(anchor)
+            let total: Int64 = 80_000_000 * Int64(index + 1)
+            let fraction = [0.42, 0.87, 0.13, 0.65, 0.3][index % 5]
+            activity.items.append(DownloadItem(
+                id: ObjectIdentifier(anchor), fileURL: url, finalURL: url, name: name, fraction: fraction,
+                completed: Int64(Double(total) * fraction), total: total, isIndeterminate: index == 2,
+                countsBytes: true, remaining: 20 + 40 * Double(index), detail: nil, isPaused: index == 3,
+                isCancellable: true, isFinished: false, lastProgress: now
+            ))
+        }
+        register()
+        return true
+    }
+    #endif
 }

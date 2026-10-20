@@ -117,7 +117,7 @@ private struct MeetingsSection: View {
     }
 
     private var nextMeetingText: String {
-        guard let next = service.nextEvent else { return "None in the next 24 hours" }
+        guard let next = service.nextEvent else { return "None today or tomorrow" }
         let time = next.start <= Date() ? "now" : next.start.formatted(date: .omitted, time: .shortened)
         return "\(next.title), \(time)"
     }

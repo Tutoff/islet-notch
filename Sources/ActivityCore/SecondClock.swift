@@ -176,9 +176,23 @@ public final class SecondClock {
     }
 }
 
+private struct TicksActiveKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+public extension EnvironmentValues {
+    /// False for content that is laid out but not shown, such as a Live page scrolled out of view: its 1 Hz clocks
+    /// and progress rings stop and keep their last value. A lazy stack may keep an off-screen neighbour "appeared",
+    /// so appear and disappear alone don't say whether anyone can see it. True by default.
+    var ticksActive: Bool {
+        get { self[TicksActiveKey.self] }
+        set { self[TicksActiveKey.self] = newValue }
+    }
+}
+
 public extension View {
-    /// Keeps `SecondClock.shared` ticking while this view is on screen. Read `SecondClock.shared.now` in the
-    /// body to refresh every second.
+    /// Keeps `SecondClock.shared` ticking while this view is on screen (and `ticksActive`). Read
+    /// `SecondClock.shared.now` in the body to refresh every second.
     func ticksEverySecond() -> some View {
         modifier(SecondTicker(anchor: nil))
     }
@@ -190,31 +204,48 @@ public extension View {
     }
 }
 
-/// Retains the clock between appear and disappear. Duplicate appear/disappear calls are harmless (the
-/// token makes retain/release idempotent), and a view torn down without `onDisappear` releases on deinit.
+/// Retains the clock between appear and disappear while `ticksActive`; inactive, the view keeps showing the last
+/// `now`. Duplicate appear/disappear calls are harmless (the token makes retain/release idempotent), and a view
+/// torn down without `onDisappear` releases on deinit.
 private struct SecondTicker: ViewModifier {
     let anchor: Date?
+    @Environment(\.ticksActive) private var active
     @State private var token = TickerToken()
 
     func body(content: Content) -> some View {
         content
             .onAppear {
-                token.isRetained = true
-                SecondClock.shared.retain(token: token.id, alignedTo: anchor)
+                token.isAppeared = true
+                update(active: active)
             }
             .onDisappear {
-                token.isRetained = false
-                SecondClock.shared.release(token: token.id)
+                token.isAppeared = false
+                update(active: active)
+            }
+            .onChange(of: active) { _, newValue in
+                update(active: newValue)
             }
             .onChange(of: anchor) { _, newValue in
                 SecondClock.shared.realign(token: token.id, to: newValue)
             }
+    }
+
+    private func update(active: Bool) {
+        let wanted = token.isAppeared && active
+        guard wanted != token.isRetained else { return }
+        token.isRetained = wanted
+        if wanted {
+            SecondClock.shared.retain(token: token.id, alignedTo: anchor)
+        } else {
+            SecondClock.shared.release(token: token.id)
+        }
     }
 }
 
 /// Main-thread only (created and used by SwiftUI on the main thread).
 private final class TickerToken {
     let id = UUID()
+    var isAppeared = false
     var isRetained = false
 
     deinit {

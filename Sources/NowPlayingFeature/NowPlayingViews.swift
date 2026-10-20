@@ -42,14 +42,26 @@ public struct NowPlayingCompactTrailing: View {
 
 // MARK: - Open island
 
-/// Media card for the open island (≈ 340×110 pt): artwork, title, artist, progress, controls.
+/// The open island's Music page (≈ 480×144 pt): the artwork nearly edge to edge on the left; title, artist, a short
+/// progress bar and the controls (in the artwork's color) beside it. Scales down to smaller containers.
 @MainActor
 public struct NowPlayingExpandedView: View {
     private let service: NowPlayingService
+    private let isActive: Bool
 
     public init(service: NowPlayingService = .shared) {
         self.service = service
+        self.isActive = true
     }
+
+    /// `isActive` false (e.g. a page scrolled out of view) keeps the progress still: it only ticks while visible.
+    public init(service: NowPlayingService = .shared, isActive: Bool) {
+        self.service = service
+        self.isActive = isActive
+    }
+
+    /// Width of the progress block and the controls under it: short on purpose, it follows the text, not the page.
+    private static let progressWidth: CGFloat = 264
 
     public var body: some View {
         // A ZStack, not a Group: a Group would hand onAppear to each branch and refresh again when
@@ -62,115 +74,131 @@ public struct NowPlayingExpandedView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Once per open: catches seeks (no notification), a consent changed in System Settings, and the
-        // start-up snapshot deferred until the user shows interest.
-        .onAppear { service.refresh() }
+        // When it comes into view (at most every 2 s, see `refresh`): catches seeks (no notification), a consent
+        // changed in System Settings, and the start-up snapshot deferred until the user shows interest.
+        .onAppear { if isActive { service.refresh() } }
+        .onChange(of: isActive) { _, active in
+            if active { service.refresh() }
+        }
     }
 
     private func player(_ track: NowPlayingTrack) -> some View {
-        HStack(spacing: 14) {
-            Button(action: service.openSourceApp) {
-                ArtworkThumbnail(artwork: track.artwork, fallbackIcon: service.sourceIcon,
-                                 cornerRadius: 12, symbolSize: 28)
-                    .frame(width: 78, height: 78)
-                    .overlay(alignment: .bottomTrailing) {
-                        // A browser's thumbnail or a podcast's cover doesn't say where it plays: the app's icon does.
-                        if service.showsSourceApp, track.artwork != nil, let icon = service.sourceIcon {
-                            Image(nsImage: icon)
-                                .resizable()
-                                .interpolation(.high)
-                                .frame(width: 24, height: 24)
-                                .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
-                                .offset(x: 5, y: 5)
-                        }
-                    }
-                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .help(service.sourceAppName.map { "Open \($0)" } ?? "Open player")
+        let tint = service.accentColor ?? IsletTheme.primaryText
+        return HStack(spacing: 18) {
+            artwork(track)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: track.title.isEmpty ? "Unknown Title" : track.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(IsletTheme.primaryText)
                     .lineLimit(1)
                 Text(verbatim: subtitle(for: track))
-                    .font(.system(size: 12))
+                    .font(.system(size: 14))
                     .foregroundStyle(IsletTheme.secondaryText)
                     .lineLimit(1)
-                    .padding(.top, 1)
+                    .padding(.top, 2)
 
-                PlaybackProgress(track: track, isPlaying: service.isPlaying,
-                                 tint: service.accentColor ?? IsletTheme.primaryText)
-                    .padding(.top, 8)
-
-                Group {
+                VStack(spacing: 6) {
+                    PlaybackProgress(track: track, isPlaying: service.isPlaying, isActive: isActive, tint: tint)
                     if service.automationDenied {
                         // The player refused our Apple Events: dead buttons would only flicker.
                         AutomationAccessButton(appName: service.sourceAppName, action: service.openAutomationSettings)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 32)
+                            .frame(height: 40)
                     } else {
-                        controls
+                        controls(tint: tint)
                     }
                 }
-                .padding(.top, 3)
+                .frame(maxWidth: Self.progressWidth)
+                .padding(.top, 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private var controls: some View {
-        HStack(spacing: 14) {
+    private func artwork(_ track: NowPlayingTrack) -> some View {
+        Button(action: service.openSourceApp) {
+            ArtworkThumbnail(artwork: track.artwork, fallbackIcon: service.sourceIcon,
+                             cornerRadius: 14, symbolSize: 40)
+                .aspectRatio(1, contentMode: .fit)
+                .overlay(alignment: .bottomTrailing) {
+                    // A browser's thumbnail or a podcast's cover doesn't say where it plays: the app's icon does.
+                    if service.showsSourceApp, track.artwork != nil, let icon = service.sourceIcon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(width: 28, height: 28)
+                            .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                            .padding(6)
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(service.sourceAppName.map { "Open \($0)" } ?? "Open player")
+    }
+
+    private func controls(tint: Color) -> some View {
+        HStack(spacing: 20) {
             Button(action: service.previous) {
-                Image(systemName: "backward.fill").font(.system(size: 13, weight: .semibold))
+                Image(systemName: "backward.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(tint)
             }
-            .buttonStyle(IslandIconButtonStyle(size: 28))
+            .buttonStyle(IslandIconButtonStyle(size: 38))
             .accessibilityLabel("Previous track")
 
             Button(action: service.playPause) {
                 Image(systemName: service.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(tint)
                     .contentTransition(.symbolEffect(.replace))
             }
-            .buttonStyle(IslandIconButtonStyle(size: 32))
+            .buttonStyle(IslandIconButtonStyle(size: 42))
+            .background(Circle().fill(tint.opacity(0.16)))
             .accessibilityLabel(service.isPlaying ? "Pause" : "Play")
 
             Button(action: service.next) {
-                Image(systemName: "forward.fill").font(.system(size: 13, weight: .semibold))
+                Image(systemName: "forward.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(tint)
             }
-            .buttonStyle(IslandIconButtonStyle(size: 28))
+            .buttonStyle(IslandIconButtonStyle(size: 38))
             .accessibilityLabel("Next track")
         }
         .frame(maxWidth: .infinity)
     }
 
     private var emptyState: some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+        HStack(spacing: 18) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(IsletTheme.card)
-                .frame(width: 56, height: 56)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(IsletTheme.stroke, lineWidth: 1)
+                )
                 .overlay(
                     Image(systemName: "music.note")
-                        .font(.system(size: 22, weight: .medium))
+                        .font(.system(size: 36, weight: .medium))
                         .foregroundStyle(IsletTheme.tertiaryText)
                 )
-            VStack(alignment: .leading, spacing: 3) {
+                .aspectRatio(1, contentMode: .fit)
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Nothing playing")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(IsletTheme.primaryText)
                 if let deniedName = service.deniedPlayerName {
                     // A running player refused our Apple Events, so its track can't be read until allowed.
                     AutomationAccessButton(appName: deniedName, action: service.openAutomationSettings)
-                        .padding(.top, 2)
+                        .padding(.top, 4)
                 } else {
                     // With MediaRemote, browsers, Podcasts, TV… show up too.
                     Text(service.mediaRemoteStatus == .active ? "Play music, a podcast or a video"
                                                               : "Play something in Music or Spotify")
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundStyle(IsletTheme.secondaryText)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -248,16 +276,19 @@ struct ArtworkThumbnail: View {
 
 /// Thin capsule progress + elapsed / remaining labels.
 ///
-/// No polling: while playing (and only while this view is on screen) a `TimelineView` re-renders it at
-/// most once a second, aligned to the track's second boundaries and extrapolated from
-/// `elapsed`/`elapsedAt` at the playback rate. When paused it is fully static.
+/// No polling: while playing (and only while this view is on screen and `isActive`) a `TimelineView` re-renders it
+/// at most once a second, aligned to the track's second boundaries and extrapolated from `elapsed`/`elapsedAt` at
+/// the playback rate. When paused or inactive it is fully static (inactive: drawn at the current position).
 struct PlaybackProgress: View {
     let track: NowPlayingTrack
     let isPlaying: Bool
+    var isActive = true
     let tint: Color
 
     var body: some View {
-        if isPlaying, let elapsed = track.elapsed, let elapsedAt = track.elapsedAt {
+        if isPlaying, !isActive {
+            row(position: track.position(at: Date(), isPlaying: true))
+        } else if isPlaying, let elapsed = track.elapsed, let elapsedAt = track.elapsedAt {
             // Tick exactly when the displayed second changes (every second of track time below 1×; above it, still
             // once a wall-clock second, so a 2× podcast steps by 2 s rather than waking twice as often).
             let rate = track.playbackRate > 0 ? track.playbackRate : 1     // as `position(at:)`
@@ -275,12 +306,12 @@ struct PlaybackProgress: View {
         let fraction = (duration > 0 && position != nil) ? min(1, max(0, position! / duration)) : 0
         return HStack(spacing: 8) {
             Text(verbatim: position.map(Self.format) ?? "–:––")
-                .frame(minWidth: 28, alignment: .leading)
+                .frame(minWidth: 30, alignment: .leading)
             ProgressCapsule(fraction: fraction, tint: tint)
             Text(verbatim: remainingLabel(position: position, duration: duration))
-                .frame(minWidth: 32, alignment: .trailing)
+                .frame(minWidth: 34, alignment: .trailing)
         }
-        .font(.system(size: 10, weight: .medium))
+        .font(.system(size: 10.5, weight: .medium))
         .monospacedDigit()
         .foregroundStyle(IsletTheme.secondaryText)
         .lineLimit(1)
@@ -315,6 +346,6 @@ private struct ProgressCapsule: View {
                     .frame(width: max(fraction > 0 ? 4 : 0, proxy.size.width * fraction))
             }
         }
-        .frame(height: 4)
+        .frame(height: 5)
     }
 }

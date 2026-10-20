@@ -1,6 +1,5 @@
 import SwiftUI
 import IsletUI
-import BatteryFeature
 import ShelfFeature
 
 /// Expanded island: header row around the notch, then the current tab (or the drop zones while a
@@ -11,6 +10,8 @@ struct OpenView: View {
 
     var body: some View {
         let horizontalInset = model.topRadius + IsletTheme.contentPadding
+        let top = IslandModel.Metrics.openContentTop
+        let bottom = IslandModel.Metrics.openContentBottom
 
         VStack(spacing: 0) {
             HeaderView(model: model, actions: actions)
@@ -22,28 +23,31 @@ struct OpenView: View {
                 // ShelfDropZonesView), so the margins go inside it.
                 ShelfDropZonesView(
                     onDrop: actions.didDrop,
-                    contentInsets: EdgeInsets(top: 6, leading: horizontalInset, bottom: 14, trailing: horizontalInset)
+                    contentInsets: EdgeInsets(top: top, leading: horizontalInset, bottom: bottom, trailing: horizontalInset)
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Group {
-                    switch model.tab {
-                    case .live:
-                        LiveTabView(model: model, actions: actions)
-                    case .shelf:
-                        ShelfView()
-                    }
+                switch model.tab {
+                case .live:
+                    // The pager reaches the island's bottom edge (pages slide out under it): margins go inside.
+                    LiveTabView(model: model, actions: actions,
+                                contentInsets: EdgeInsets(top: top, leading: 0, bottom: bottom, trailing: 0))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.horizontal, horizontalInset)
+                case .shelf:
+                    ShelfView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.horizontal, horizontalInset)
+                        .padding(.top, top)
+                        .padding(.bottom, bottom)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, horizontalInset)
-                .padding(.top, 6)
-                .padding(.bottom, 14)
             }
         }
     }
 }
 
-/// Left: Live · Shelf tabs. Right: + (launcher) · battery · ⋯.
+/// Left: Live · Shelf tabs. Right: + (the Live tab's Launch page) · ⋯. No battery: the menu bar shows it right
+/// beside the island (its plug-in / low notices stay, as transients).
 private struct HeaderView: View {
     let model: IslandModel
     let actions: IslandActions
@@ -82,9 +86,6 @@ private struct HeaderView: View {
                 .accessibilityLabel(model.showsLauncher ? "Close launcher" : "Start an activity")
                 .animation(IsletTheme.quick, value: model.showsLauncher)
 
-                if BatteryMonitor.shared.hasBattery {
-                    BatteryIndicator()
-                }
                 Menu {
                     Button("Settings…", action: actions.openSettings)
                     Button("Clear Shelf") { ShelfStore.shared.clear() }

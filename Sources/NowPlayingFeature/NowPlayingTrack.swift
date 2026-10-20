@@ -4,7 +4,7 @@ public struct NowPlayingTrack: Equatable {
     public var title: String
     public var artist: String
     public var album: String
-    /// Downsampled artwork (≤ 160 px), or nil when unavailable / not authorized.
+    /// Downsampled artwork (short side ≤ 288 px), or nil when unavailable / not authorized.
     public var artwork: NSImage?
     /// Track length in seconds, if known.
     public var duration: TimeInterval?

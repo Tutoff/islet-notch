@@ -32,7 +32,7 @@ struct MediaRemoteSnapshot: Sendable {
     var elapsed: TimeInterval?
     var timestamp: Date?
     var rate: Double
-    /// Downsampled like the other providers' artwork (≤ 160 px), with its accent color.
+    /// Downsampled like the other providers' artwork (short side ≤ 288 px), with its accent color.
     var artwork: ProcessedArtwork?
 
     /// The app to show and to open: the parent app for web content, else the client.
